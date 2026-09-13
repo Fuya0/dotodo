@@ -29,7 +29,7 @@
 
 ```text
 ① 源码            src/**  assets/**  package.json
-② 校验            npm test（约 150 个测试）
+② 校验            npm test（142 条断言）
 ③ 发布到目录      npm run pack      → release/win-unpacked/
 ④ 安装器          npm run dist:win  → release/DoTodo-Setup-1.0.0-x64.exe
 ⑤ 签名与发布      （见下）

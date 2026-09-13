@@ -125,7 +125,7 @@ npm start
 | --- | --- |
 | 解决什么 | 仓库里哪些文件是产品、哪些是课程、哪些是产物 |
 | 源文件 | `package.json` 的 `build` 段、`tools/*`、`.gitignore` |
-| 测试 | 全部（150 个左右） |
+| 测试 | 全部（142 条断言） |
 | JavaScript 要点 | `flatMap`、`[...].sort()`、`Set` 做差集、`${}` 模板与正则替换 |
 | 关键结论 | 一个仓库要同时对「只想用这个工具的人」和「想学 Electron 的人」自解释 |
 
@@ -145,7 +145,7 @@ npm start
 
 ```powershell
 npm start            # 开发运行
-npm test             # 全部单元与集成测试（约 150 个）
+npm test             # 全部单元与集成测试（142 条断言）
 npm run smoke        # 真实 Electron 冒烟测试（隔离数据目录）
 npm run icons        # 重新生成托盘图标位图
 npm run pack         # 打包到 release/win-unpacked（不出安装器）

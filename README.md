@@ -139,7 +139,7 @@ build/                       只用于构建的资源（应用图标 SVG）
 
 ```powershell
 npm start            # 开发运行
-npm test             # 全部测试（约 150 个）
+npm test             # 全部测试（142 条断言 / 10 个文件）
 npm run smoke        # 真实 Electron 冒烟测试，使用隔离的临时数据目录
 npm run icons        # 重新生成托盘图标
 npm run pack         # 打包到 release/win-unpacked（不出安装器）
