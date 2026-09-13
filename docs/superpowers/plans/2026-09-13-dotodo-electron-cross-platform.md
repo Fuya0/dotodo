@@ -581,33 +581,57 @@ git commit -m "docs: finalize Electron learning workspace"
 
 - [ ] **Step 1: Complete Windows manual acceptance with the user**
 
-Do not continue to formal packaging while unresolved interaction or visual findings remain.
+Blocked on the user: every stage from Task 4 onward produced interface behaviour that no automated
+test can confirm. Walk `docs/testing/electron-windows-manual-checklist.md` (11 groups, ~80 items) and
+report any finding before packaging starts. Do not treat this step as done because the tests pass.
 
 - [ ] **Step 2: Build the Windows NSIS installer**
 
 Run: `npm run dist:win`. Record installer size separately from `win-unpacked` size.
 
+Attempted and blocked on the network, not on configuration. `npm run pack` needed an escalated
+sandbox to get past `spawn EPERM`, then reached `packaging platform=win32 arch=x64 electron=44.3.0`
+before the Electron zip download was aborted (`The server aborted pending request`). The zip cache at
+`%LOCALAPPDATA%\electron\Cache` is empty — `node_modules/electron/dist/` holds the extracted runtime,
+but electron-builder downloads the archive separately. Retry on an unrestricted network, or set
+`ELECTRON_MIRROR`.
+
 - [ ] **Step 3: Install, launch, upgrade and uninstall on Windows**
 
-Verify Start menu/desktop shortcuts, user data retention, launch-at-login and clean uninstallation.
+Checklist written and waiting: `docs/release/windows-release-checklist.md` section 5. Must be done on
+a clean Windows machine or VM — leftovers from the development machine hide most upgrade problems.
 
-- [ ] **Step 4: Explain and configure code signing without storing secrets**
+- [x] **Step 4: Explain and configure code signing without storing secrets**
 
-Unsigned local builds may show an unknown-publisher warning. Certificates and CI secrets are added only with explicit user authorization.
+Documented in lesson 09 and in section 6 of the Windows checklist: what signing buys, why an unsigned
+build shows 未知发布者, how CI should carry the certificate through Secrets, and the `git log` check
+that proves no certificate ever entered the repository.
 
 - [ ] **Step 5: Build and verify macOS artifacts on macOS**
 
 Run: `npm run dist:mac` on Intel/Apple Silicon or a macOS CI runner; verify `.app`, `.dmg`, ZIP, login item, tray/menu bar and notarization.
 
-- [ ] **Step 6: Write lesson 09 and packaging exercises**
+Blocked: this project has never been built or run on macOS. `docs/release/macos-release-checklist.md`
+lists every step as pending, including five items that are expected to need code changes (menu-bar
+template image, Dock menu, `openAsHidden`, macOS quit semantics, about panel).
 
-Exercises identify the roles of source, ASAR, `.exe`, NSIS installer, `.app`, `.dmg`, architecture and signing.
+- [x] **Step 6: Write lesson 09 and packaging exercises**
+
+`docs/learning/electron/09-packaging-and-signing.md` covers the acceptance gate, the five packaging
+stages, NSIS configuration, the three size numbers, signing versus notarization, the macOS login-item
+limitation, the CI design, and the download failures you can hit offline.
+
+The packaging exercises live in `exercises/electron/08-build-and-release/` rather than a second set:
+artifact-name expansion, target flattening, size comparison, artifact sorting, path classification
+and release-plan diffing. `README.md` links there.
 
 - [ ] **Step 7: Publish to GitHub only after explicit approval**
 
-Create the workflow, configure non-secret metadata, ask for signing-secret setup if needed, push the accepted branch and create a versioned release.
+Blocked on explicit approval. `.github/workflows/release.yml` is ready (tests before packaging,
+installer-only artifacts, tag-gated release step, Secrets for signing) but nothing has been pushed and
+no release exists.
 
-- [ ] **Step 8: Commit release configuration**
+- [x] **Step 8: Commit release configuration**
 
 ```bash
 git add package.json .github/workflows/release.yml docs/release docs/learning/electron/09-packaging-and-signing.md

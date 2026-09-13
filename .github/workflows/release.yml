@@ -9,37 +9,62 @@ on:
 permissions:
   contents: write
 
+# 同一条 ref 上不并行构建；已经在跑的不要被后来者取消，否则会留下半个安装包。
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
-            command: npm run dist:win -- --publish never
-            artifact: windows-installers
+            package: npm run dist:win -- --publish never
+            artifact: dotodo-windows
+            # 只传安装器。绝不能写 release/*：那里包含 300 MB+ 的解压目录。
+            files: release/*.exe
           - os: macos-latest
-            command: npm run dist:mac -- --publish never
-            artifact: macos-installers
+            package: npm run dist:mac -- --publish never
+            artifact: dotodo-macos
+            files: |
+              release/*.dmg
+              release/*.zip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm test
-      - run: ${{ matrix.command }}
-      - uses: actions/upload-artifact@v4
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 测试挂掉的版本不该产出安装包。
+      - name: Test
+        run: npm test
+
+      - name: Package
+        run: ${{ matrix.package }}
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: release/*
+          path: ${{ matrix.files }}
           if-no-files-found: error
+          retention-days: 14
 
-      - name: Attach files to GitHub Release
+      # 打 tag 时才附加到 GitHub Release。未配置签名证书也能走到这里，
+      # 只是产物会带「未知发布者」（Windows）或「无法检查」（macOS）提示。
+      # 签名需要的密钥一律走 Secrets，绝不写进仓库。
+      - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*
+          files: ${{ matrix.files }}
           generate_release_notes: true

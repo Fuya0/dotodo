@@ -44,7 +44,7 @@ npm start
 | [06](06-native-shell.md) | 托盘、全局快捷键、窗口层级、开机启动 | 70 min | 6 题 | `node exercises/electron/06-native-shell/starter.test.js` |
 | [07](07-debug-test-verify.md) | 导入导出、数据恢复与验证工作流 | 45 min | 6 题 | `node exercises/electron/07-testing/starter.test.js` |
 | [08](08-build-and-release.md) | 仓库整理、课程索引与构建配置 | 40 min | 6 题 | `node exercises/electron/08-build-and-release/starter.test.js` |
-| 09 | 打包、签名与跨平台发布 | 40 min | — | — |
+| [09](09-packaging-and-signing.md) | 打包、签名与跨平台发布 | 40 min | — | — |
 | [附录](appendix-desktop-stack-and-packaging.md) | 桌面技术栈对比、体积与发布格式 | 20 min | — | — |
 
 「预计」是**认真做完习题**的时间，只读不写大约是一半。
@@ -135,7 +135,11 @@ npm start
 | --- | --- |
 | 解决什么 | Windows 安装包、macOS `.app`/`.dmg`、签名与公证 |
 | 涉及文件 | `package.json` 的 `build` 段、`.github/workflows/release.yml`、`docs/release/*` |
+| 清单 | `docs/release/windows-release-checklist.md`、`docs/release/macos-release-checklist.md` |
 | 关键结论 | 下载体积 / 安装后体积 / 打包目录体积是三个数字；没验证过的平台不要声称完成 |
+
+**第 9 课的产物目前还没做出来**：正式打包要等人工验收通过，macOS 必须在 macOS 上构建。
+两份清单里每一条都是待办，不是已完成记录。
 
 ## 全部命令
 
