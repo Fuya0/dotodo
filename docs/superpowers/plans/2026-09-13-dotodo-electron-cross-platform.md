@@ -69,7 +69,7 @@ exercises/electron/
 - Produces: `createState(localDate, nowIso)`, `validateState(value)`, `cloneState(value)`.
 - Produces: `createDailyTodoEngine(initialState, { now, createId })` with `getSnapshot()`, `addTask(text)`, `editTask(id,text)`, `toggleTask(id)`, `reorderTask(id,targetIndex)`, `deleteTodayTask(id)`, `deleteHistoryTask(date,id)`, `undo(token)`, `continueTask(date,id)`, and `ensureCurrentDay(now)`.
 
-- [ ] **Step 1: Replace the legacy store test with failing schema tests**
+- [x] **Step 1: Replace the legacy store test with failing schema tests**
 
 ```js
 test('createState creates one open local day', () => {
@@ -80,11 +80,11 @@ test('createState creates one open local day', () => {
 });
 ```
 
-- [ ] **Step 2: Run the schema test and observe the missing-module failure**
+- [x] **Step 2: Run the schema test and observe the missing-module failure**
 
 Run: `node --test test/domain/state-schema.test.js`
 
-- [ ] **Step 3: Implement the schema with explicit settings defaults**
+- [x] **Step 3: Implement the schema with explicit settings defaults**
 
 ```js
 const DEFAULT_SETTINGS = Object.freeze({
@@ -95,15 +95,15 @@ const DEFAULT_SETTINGS = Object.freeze({
 });
 ```
 
-- [ ] **Step 4: Add failing domain tests for add/edit/toggle/reorder/delete/undo**
+- [x] **Step 4: Add failing domain tests for add/edit/toggle/reorder/delete/undo**
 
 Use fixed `now()` and `createId()` functions; assert returned snapshots rather than internal arrays.
 
-- [ ] **Step 5: Implement immutable public snapshots and validated state transitions**
+- [x] **Step 5: Implement immutable public snapshots and validated state transitions**
 
 Every command returns `{ ok: true, snapshot }` or `{ ok: false, error, snapshot }`. No caller receives the engine's mutable state reference.
 
-- [ ] **Step 6: Add failing tests for rollover, clock rollback and one-time continuation**
+- [x] **Step 6: Add failing tests for rollover, clock rollback and one-time continuation**
 
 ```js
 assert.equal(engine.ensureCurrentDay('2026-09-14T00:00:01+08:00').rolledOver, true);
@@ -112,20 +112,20 @@ assert.equal(engine.continueTask('2026-09-13', sourceId).ok, true);
 assert.equal(engine.continueTask('2026-09-13', sourceId).ok, false);
 ```
 
-- [ ] **Step 7: Implement rollover and reciprocal continuation metadata**
+- [x] **Step 7: Implement rollover and reciprocal continuation metadata**
 
 Deletion clears live reciprocal IDs but preserves `hasBeenContinued`; undo restores reciprocal links only when the counterpart exists.
 
-- [ ] **Step 8: Run all domain tests**
+- [x] **Step 8: Run all domain tests**
 
 Run: `node --test test/domain/*.test.js`
 Expected: all pass.
 
-- [ ] **Step 9: Write lesson 01 and its hand-written exercises**
+- [x] **Step 9: Write lesson 01 and its hand-written exercises**
 
 The lesson explains pure functions, closures, dependency injection, object/array methods, defensive cloning and why Electron-independent domain code is easier to test. Exercises require implementing `clamp`, `findTask`, `moveItem`, and a simplified rollover function without copying production code.
 
-- [ ] **Step 10: Commit Task 1**
+- [x] **Step 10: Commit Task 1**
 
 ```bash
 git add package.json src/domain test/domain docs/learning/electron/01-process-model-and-pure-domain.md exercises/electron/01-process-model
