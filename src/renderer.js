@@ -8,15 +8,42 @@ const progressBar = $('#progressBar');
 const clearCompleted = $('#clearCompleted');
 
 let todos = [];
+let snapshot = null;
 let currentFilter = 'all';
 let editingId = null;
 
-function makeId() {
-  return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+function acceptResult(result) {
+  if (result?.snapshot) {
+    snapshot = result.snapshot;
+    todos = snapshot.activeDay.tasks;
+    syncSettingsControls();
+    render();
+  }
+  if (result?.ok === false && result.error) showRuntimeWarning(result.error);
+  if (result?.ok === true) refreshRuntimeStatus();
+  return result;
 }
 
-function save() {
-  return window.dotodo.saveTodos(todos);
+function showRuntimeWarning(message) {
+  const warning = $('#runtimeWarning');
+  warning.textContent = message || '';
+  warning.hidden = !message;
+}
+
+function syncSettingsControls() {
+  opacitySlider.value = Math.round(snapshot.settings.backgroundOpacity * 100);
+  opacityValue.value = `${opacitySlider.value}%`;
+  $('#alwaysOnTopToggle').checked = snapshot.settings.windowMode === 'topmost';
+  $('#launchAtLoginToggle').checked = snapshot.settings.launchAtLogin;
+}
+
+async function refreshRuntimeStatus() {
+  try {
+    const status = await window.dotodo.getStatus();
+    showRuntimeWarning(status.warnings.join('；'));
+  } catch (error) {
+    showRuntimeWarning(`无法读取运行状态：${error.message}`);
+  }
 }
 
 function filteredTodos() {
@@ -77,21 +104,15 @@ function render() {
 async function addTodo(text) {
   const value = text.trim();
   if (!value) return;
-  todos.unshift({ id: makeId(), text: value.slice(0, 240), completed: false, createdAt: Date.now() });
-  await save();
-  render();
+  acceptResult(await window.dotodo.addTask(value.slice(0, 240)));
 }
 
 async function toggleTodo(id) {
-  todos = todos.map((todo) => todo.id === id ? { ...todo, completed: !todo.completed } : todo);
-  await save();
-  render();
+  acceptResult(await window.dotodo.toggleTask(id));
 }
 
 async function deleteTodo(id) {
-  todos = todos.filter((todo) => todo.id !== id);
-  await save();
-  render();
+  acceptResult(await window.dotodo.deleteTodayTask(id));
 }
 
 function beginEdit(id, textElement) {
@@ -112,8 +133,7 @@ function beginEdit(id, textElement) {
     finished = true;
     const value = input.value.trim();
     if (commit && value) {
-      todos = todos.map((item) => item.id === id ? { ...item, text: value } : item);
-      await save();
+      acceptResult(await window.dotodo.editTask(id, value));
     }
     editingId = null;
     render();
@@ -141,9 +161,9 @@ document.querySelectorAll('.filter').forEach((button) => {
 });
 
 clearCompleted.addEventListener('click', async () => {
-  todos = todos.filter((todo) => !todo.completed);
-  await save();
-  render();
+  for (const todo of todos.filter((item) => item.completed)) {
+    acceptResult(await window.dotodo.deleteTodayTask(todo.id));
+  }
 });
 
 const settingsButton = $('#settingsButton');
@@ -166,12 +186,16 @@ const opacitySlider = $('#opacitySlider');
 const opacityValue = $('#opacityValue');
 opacitySlider.addEventListener('input', () => {
   opacityValue.value = `${opacitySlider.value}%`;
-  window.dotodo.setOpacity(Number(opacitySlider.value) / 100);
+  window.dotodo.setBackgroundOpacity(Number(opacitySlider.value) / 100).then(acceptResult);
 });
-$('#alwaysOnTopToggle').addEventListener('change', (event) => window.dotodo.setAlwaysOnTop(event.target.checked));
-$('#launchAtLoginToggle').addEventListener('change', (event) => window.dotodo.setLaunchAtLogin(event.target.checked));
-$('#minimizeButton').addEventListener('click', () => window.dotodo.minimize());
-$('#closeButton').addEventListener('click', () => window.dotodo.close());
+$('#alwaysOnTopToggle').addEventListener('change', (event) => {
+  window.dotodo.setWindowMode(event.target.checked ? 'topmost' : 'normal').then(acceptResult);
+});
+$('#launchAtLoginToggle').addEventListener('change', (event) => {
+  window.dotodo.setLaunchAtLogin(event.target.checked).then(acceptResult);
+});
+$('#minimizeButton').addEventListener('click', () => window.dotodo.minimizeWindow());
+$('#closeButton').addEventListener('click', () => window.dotodo.closeWindow());
 
 document.addEventListener('keydown', (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'n') {
@@ -182,13 +206,15 @@ document.addEventListener('keydown', (event) => {
 });
 
 async function init() {
-  const state = await window.dotodo.getState();
-  todos = state.todos;
-  opacitySlider.value = Math.round(state.opacity * 100);
-  opacityValue.value = `${opacitySlider.value}%`;
-  $('#alwaysOnTopToggle').checked = state.alwaysOnTop;
-  $('#launchAtLoginToggle').checked = state.launchAtLogin;
+  const [initialSnapshot, status] = await Promise.all([
+    window.dotodo.getSnapshot(),
+    window.dotodo.getStatus()
+  ]);
+  snapshot = initialSnapshot;
+  todos = snapshot.activeDay.tasks;
+  syncSettingsControls();
   $('#dateLabel').textContent = new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date());
+  showRuntimeWarning(status.warnings.join('；'));
   render();
 }
 

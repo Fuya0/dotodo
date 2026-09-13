@@ -8,7 +8,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test \"test/**/*.test.js\"",
-    "smoke": "electron . --smoke-test",
+    "smoke": "node tools/run-smoke.js",
     "pack": "electron-builder --dir",
     "dist:win": "electron-builder --win nsis",
     "dist:mac": "electron-builder --mac dmg zip",

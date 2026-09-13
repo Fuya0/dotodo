@@ -213,6 +213,42 @@ test('completed or missing historical tasks cannot continue', () => {
   assert.equal(engine.continueTask('2026-09-11', 'missing').ok, false);
 });
 
+test('settings and window bounds update only through validated engine commands', () => {
+  const engine = createEngine();
+
+  assert.equal(engine.updateSettings({ backgroundOpacity: 0.75 }).ok, true);
+  assert.equal(engine.updateSettings({ windowMode: 'desktop', closeToTray: false }).ok, true);
+  assert.equal(engine.updateWindowBounds({ x: 120, y: 80, width: 420, height: 640 }).ok, true);
+  let snapshot = engine.getSnapshot();
+  assert.equal(snapshot.settings.backgroundOpacity, 0.75);
+  assert.equal(snapshot.settings.windowMode, 'desktop');
+  assert.equal(snapshot.settings.closeToTray, false);
+  assert.deepEqual(snapshot.windowBounds, { x: 120, y: 80, width: 420, height: 640 });
+
+  assert.equal(engine.updateSettings({ backgroundOpacity: 0.2 }).ok, false);
+  assert.equal(engine.updateSettings({ unexpected: true }).ok, false);
+  assert.equal(engine.updateWindowBounds({ width: 10 }).ok, false);
+  snapshot = engine.getSnapshot();
+  assert.equal(snapshot.settings.backgroundOpacity, 0.75);
+  assert.equal(snapshot.windowBounds.width, 420);
+});
+
+test('replaceState validates imports and clears obsolete undo records', () => {
+  const engine = createEngine();
+  const deletion = engine.addTask('即将被替换').snapshot.activeDay.tasks[0];
+  const deleted = engine.deleteTodayTask(deletion.id);
+  const imported = createState('2026-09-14');
+  imported.settings.backgroundOpacity = 0.7;
+
+  assert.equal(engine.replaceState(imported).ok, true);
+  assert.equal(engine.getSnapshot().activeDay.date, '2026-09-14');
+  assert.equal(engine.undo(deleted.undoToken).ok, false);
+
+  const beforeInvalid = engine.getSnapshot();
+  assert.equal(engine.replaceState({ schemaVersion: 999 }).ok, false);
+  assert.deepEqual(engine.getSnapshot(), beforeInvalid);
+});
+
 function task(id, text, completed, createdAt) {
   return {
     id,

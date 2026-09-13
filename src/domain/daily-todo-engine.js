@@ -1,4 +1,4 @@
-const { cloneState, localDateOf, parseIsoInstant } = require('./state-schema');
+const { cloneState, localDateOf, parseIsoInstant, validateState } = require('./state-schema');
 
 const MAX_TEXT_LENGTH = 240;
 
@@ -152,6 +152,50 @@ function createDailyTodoEngine(initialState, dependencies) {
     return { ...success(), rolledOver: true, clockMovedBackward: false };
   }
 
+  function updateSettings(patch) {
+    const allowedKeys = new Set([
+      'backgroundOpacity',
+      'windowMode',
+      'closeToTray',
+      'launchAtLogin'
+    ]);
+    if (!isPlainObject(patch) || Object.keys(patch).length === 0 ||
+        Object.keys(patch).some((key) => !allowedKeys.has(key))) {
+      return failure('设置变更无效。');
+    }
+    return applyCandidate({
+      ...state,
+      settings: { ...state.settings, ...patch }
+    });
+  }
+
+  function updateWindowBounds(patch) {
+    const allowedKeys = new Set(['x', 'y', 'width', 'height']);
+    if (!isPlainObject(patch) || Object.keys(patch).length === 0 ||
+        Object.keys(patch).some((key) => !allowedKeys.has(key))) {
+      return failure('窗口位置或尺寸变更无效。');
+    }
+    return applyCandidate({
+      ...state,
+      windowBounds: { ...state.windowBounds, ...patch }
+    });
+  }
+
+  function replaceState(nextState) {
+    const validation = validateState(nextState);
+    if (!validation.ok) return failure(`导入状态无效：${validation.error}`);
+    state = validation.state;
+    undoRecord = null;
+    return success();
+  }
+
+  function applyCandidate(candidate) {
+    const validation = validateState(candidate);
+    if (!validation.ok) return failure(validation.error);
+    state = validation.state;
+    return success();
+  }
+
   function unavailableTask(id) {
     const existsInHistory = state.history.some((day) => day.tasks.some((task) => task.id === id));
     return failure(existsInHistory ? '历史任务是只读的。' : '找不到该任务。');
@@ -226,8 +270,15 @@ function createDailyTodoEngine(initialState, dependencies) {
     deleteHistoryTask,
     undo,
     continueTask,
-    ensureCurrentDay
+    ensureCurrentDay,
+    updateSettings,
+    updateWindowBounds,
+    replaceState
   });
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function normalizeText(text) {

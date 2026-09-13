@@ -201,19 +201,19 @@ git commit -m "feat: add resilient Electron state storage"
 - Produces: `registerIpc({ ipcMain, engine, store, dialogs, shell })` returning `dispose()`.
 - Produces renderer API: `getSnapshot`, task commands, settings commands, import/export, open data folder, and window commands.
 
-- [ ] **Step 1: Write failing IPC tests with a recording `ipcMain` adapter**
+- [x] **Step 1: Write failing IPC tests with a recording `ipcMain` adapter**
 
 Assert exact channel names and reject malformed IDs, dates, indices, text and settings before calling the engine.
 
-- [ ] **Step 2: Run IPC tests and observe the missing registration module**
+- [x] **Step 2: Run IPC tests and observe the missing registration module**
 
 Run: `node --test test/electron/ipc.test.js`
 
-- [ ] **Step 3: Implement IPC registration with a fixed channel map**
+- [x] **Step 3: Implement IPC registration with a fixed channel map**
 
 No handler accepts a method name from the renderer. Each handler validates its own primitive input and returns serializable results.
 
-- [ ] **Step 4: Rewrite Preload as a narrow contextBridge**
+- [x] **Step 4: Rewrite Preload as a narrow contextBridge**
 
 ```js
 contextBridge.exposeInMainWorld('dotodo', Object.freeze({
@@ -222,24 +222,24 @@ contextBridge.exposeInMainWorld('dotodo', Object.freeze({
 }));
 ```
 
-- [ ] **Step 5: Rewrite main composition root**
+- [x] **Step 5: Rewrite main composition root**
 
 Create the store after `app.whenReady()`, load or create state, ensure the current day, create the engine, register IPC, and then show the window after its first completed load.
 
-- [ ] **Step 6: Add security assertions**
+- [x] **Step 6: Add security assertions**
 
 Verify BrowserWindow uses `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`; deny unexpected navigation and new windows.
 
-- [ ] **Step 7: Run tests and Electron smoke mode**
+- [x] **Step 7: Run tests and Electron smoke mode**
 
 Run: `node --test test/domain/*.test.js test/infrastructure/*.test.js test/electron/*.test.js`
 Run: `npm run smoke`
 
-- [ ] **Step 8: Write lesson 03 and IPC exercises**
+- [x] **Step 8: Write lesson 03 and IPC exercises**
 
 Exercises ask the learner to classify APIs by process, add one safe read-only IPC call, and identify three unsafe preload examples.
 
-- [ ] **Step 9: Commit Task 3**
+- [x] **Step 9: Commit Task 3**
 
 ```bash
 git add src/main.js src/preload.js src/electron test/electron docs/learning/electron/03-main-preload-renderer.md exercises/electron/03-ipc
