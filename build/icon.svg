@@ -1,19 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!--
+    DoTodo 应用图标：与界面里的品牌方块同源。
+    几何形状由 tools/make-tray-icon.js 用有符号距离场复现，改这里记得同步改那里。
+  -->
   <defs>
-    <linearGradient id="paper" x1="170" y1="90" x2="850" y2="930" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFFDF8"/>
-      <stop offset="1" stop-color="#F1EADF"/>
+    <linearGradient id="surface" x1="200" y1="160" x2="824" y2="880" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#2563EB"/>
     </linearGradient>
-    <linearGradient id="coral" x1="249" y1="200" x2="766" y2="824" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#E88864"/>
-      <stop offset="1" stop-color="#C95E41"/>
-    </linearGradient>
-    <filter id="shadow" x="90" y="80" width="844" height="870" filterUnits="userSpaceOnUse">
-      <feDropShadow dx="0" dy="30" stdDeviation="35" flood-color="#553424" flood-opacity=".25"/>
+    <filter id="shadow" x="100" y="110" width="824" height="856" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="28" stdDeviation="34" flood-color="#08203A" flood-opacity=".34"/>
     </filter>
   </defs>
-  <rect x="142" y="118" width="740" height="788" rx="210" fill="url(#paper)" filter="url(#shadow)"/>
-  <rect x="234" y="209" width="556" height="606" rx="146" fill="url(#coral)"/>
-  <path d="M343 516l113 113 231-251" fill="none" stroke="#FFFDF7" stroke-width="74" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M703 180c32 29 52 69 55 112" fill="none" stroke="#F5CF6B" stroke-width="30" stroke-linecap="round"/>
+  <rect
+    x="192"
+    y="192"
+    width="640"
+    height="640"
+    rx="192"
+    fill="url(#surface)"
+    filter="url(#shadow)"
+  />
+  <path
+    d="M368 528l96 96 200-224"
+    fill="none"
+    stroke="#06121F"
+    stroke-width="72"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
 </svg>

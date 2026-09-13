@@ -380,36 +380,42 @@ git commit -m "feat: add history settings and task interactions"
 **Interfaces:**
 - Produces: `createShellController({ app, BrowserWindow, Tray, Menu, globalShortcut, platform })` with `initialize`, `setWindowMode`, `setLaunchAtLogin`, `toggleVisibility`, and `dispose`.
 
-- [ ] **Step 1: Write failing shell-controller tests with Electron adapters**
+- [x] **Step 1: Write failing shell-controller tests with Electron adapters**
 
 Assert tray menu actions, shortcut collision reporting, close-to-tray behavior, normal/topmost mode mapping and disposal.
 
-- [ ] **Step 2: Implement tray and global shortcut lifecycle**
+- [x] **Step 2: Implement tray and global shortcut lifecycle**
 
 Register after `ready`, unregister during `will-quit`, and keep the tray object strongly referenced.
 
-- [ ] **Step 3: Implement normal and topmost window modes**
+- [x] **Step 3: Implement normal and topmost window modes**
 
 Use `setAlwaysOnTop(false)` for normal and `setAlwaysOnTop(true, 'floating')` for topmost.
 
-- [ ] **Step 4: Implement the desktop-mode platform seam**
+- [x] **Step 4: Implement the desktop-mode platform seam**
 
 On Windows, preserve the public `WindowMode` contract and place native Z-order behavior behind a replaceable adapter. On macOS, document and expose the closest verified behavior rather than pretending identical semantics.
 
-- [ ] **Step 5: Implement login-item reconciliation**
+- [x] **Step 5: Implement login-item reconciliation**
 
 Call `app.setLoginItemSettings`, read back effective settings where supported, roll back persisted UI state on failure, and explain macOS signing limitations.
 
-- [ ] **Step 6: Run shell tests and smoke mode**
+- [x] **Step 6: Run shell tests and smoke mode**
+
+Run: `node test/electron/shell-controller.test.js`
+Run: `npm run smoke`
+
+Note: the smoke run is verified by the user locally; the agent sandbox cannot spawn Electron.
+The tray icon is a generated bitmap (`npm run icons`) because `Tray` does not accept SVG.
 
 Run: `node --test test/electron/*.test.js`
 Run: `npm run smoke`
 
-- [ ] **Step 7: Write lesson 06 and native-shell exercises**
+- [x] **Step 7: Write lesson 06 and native-shell exercises**
 
 Teach Electron lifecycle events, retained object references, accelerators, tray differences, login items and platform feature detection.
 
-- [ ] **Step 8: Commit Task 6**
+- [x] **Step 8: Commit Task 6**
 
 ```bash
 git add src/electron src/main.js test/electron build/icon.svg docs/learning/electron/06-native-shell.md exercises/electron/06-native-shell

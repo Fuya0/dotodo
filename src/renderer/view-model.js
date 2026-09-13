@@ -27,12 +27,13 @@ const OPACITY_MIN = 0.55;
 const OPACITY_MAX = 1;
 
 /**
- * 这一课只暴露主进程已经支持的两种层级。
- * `desktop` 模式要等原生壳层那一步，界面不提前摆出点不动的按钮。
+ * 三种窗口层级。`desktop` 在主进程里是近似实现（移出任务栏，但不真的钉在桌面上），
+ * 切换时主进程会回传一段 `notice` 说明差异，界面负责如实展示。
  */
 const WINDOW_MODES = Object.freeze([
   { value: 'normal', label: '普通' },
-  { value: 'topmost', label: '置顶' }
+  { value: 'topmost', label: '置顶' },
+  { value: 'desktop', label: '桌面' }
 ]);
 
 /** 把 `2026-09-13` 变成 `9月13日 周日`；非法输入返回空字符串。 */

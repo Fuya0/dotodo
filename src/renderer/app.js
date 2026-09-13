@@ -46,6 +46,8 @@ const dom = {
   opacitySlider: document.querySelector('#opacitySlider'),
   opacityValue: document.querySelector('#opacityValue'),
   windowModeGroup: document.querySelector('#windowModeGroup'),
+  closeToTrayToggle: document.querySelector('#closeToTrayToggle'),
+  launchAtLoginToggle: document.querySelector('#launchAtLoginToggle'),
   layerButton: document.querySelector('#layerButton'),
   minimizeButton: document.querySelector('#minimizeButton'),
   closeButton: document.querySelector('#closeButton')
@@ -77,6 +79,8 @@ async function runCommand(promise) {
   }
   if (!result || result.cancelled) return null;
   if (result.ok === false) showMessage(result.error);
+  // 主进程可以附带一段说明（例如桌面层级只是近似实现），界面负责如实转述。
+  if (result.notice) showMessage(result.notice);
   if (result.snapshot) applySnapshot(result.snapshot);
   return result;
 }
@@ -91,12 +95,25 @@ function applySnapshot(snapshot) {
 function render() {
   if (!state.snapshot) return;
   const settings = deriveSettingsView(state.snapshot);
-  applySurfaceOpacity(settings);
-  renderWindowModes(settings);
-  dom.layerButton.setAttribute('aria-pressed', String(settings.windowMode === 'topmost'));
+  renderSettings(settings);
   renderToday(deriveTodayView(state.snapshot));
   renderHistory(deriveHistoryView(state.snapshot));
   renderPage();
+}
+
+function renderSettings(settings) {
+  applySurfaceOpacity(settings);
+  renderWindowModes(settings);
+  dom.closeToTrayToggle.checked = settings.closeToTray;
+  dom.launchAtLoginToggle.checked = settings.launchAtLogin;
+
+  const current = settings.windowModes.find((mode) => mode.selected);
+  dom.layerButton.setAttribute('aria-pressed', String(settings.windowMode === 'topmost'));
+  if (current) {
+    const label = `窗口层级：${current.label}（点击切换）`;
+    dom.layerButton.setAttribute('aria-label', label);
+    dom.layerButton.title = label;
+  }
 }
 
 /* ---------- Today ---------- */
@@ -555,9 +572,20 @@ function createModeButton(mode) {
   return button;
 }
 
+dom.closeToTrayToggle.addEventListener('change', (event) => {
+  runCommand(window.dotodo.setCloseToTray(event.target.checked));
+});
+
+dom.launchAtLoginToggle.addEventListener('change', (event) => {
+  runCommand(window.dotodo.setLaunchAtLogin(event.target.checked));
+});
+
+/** 标题栏的层级按钮在三档之间循环，和设置面板里的分段控件操作的是同一个设置。 */
 dom.layerButton.addEventListener('click', () => {
-  const mode = state.snapshot?.settings.windowMode === 'topmost' ? 'normal' : 'topmost';
-  runCommand(window.dotodo.setWindowMode(mode));
+  const settings = deriveSettingsView(state.snapshot);
+  const index = settings.windowModes.findIndex((mode) => mode.value === settings.windowMode);
+  const next = settings.windowModes[(index + 1) % settings.windowModes.length];
+  runCommand(window.dotodo.setWindowMode(next.value));
 });
 
 dom.minimizeButton.addEventListener('click', () => window.dotodo.minimizeWindow());

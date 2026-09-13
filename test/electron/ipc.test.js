@@ -79,7 +79,8 @@ function createHarness(overrides = {}) {
     setWindowMode: (...args) => calls.push(['setWindowMode', ...args]),
     setLaunchAtLogin: (...args) => calls.push(['setLaunchAtLogin', ...args]),
     minimize: () => calls.push(['minimize']),
-    close: () => calls.push(['close'])
+    close: () => calls.push(['close']),
+    syncSettings: (...args) => calls.push(['syncSettings', ...args])
   };
   const ipcMain = createRecordingIpcMain();
   const status = {
@@ -211,6 +212,72 @@ test('native setting failures return the authoritative snapshot without mutating
 
   assert.equal(result.ok, false);
   assert.match(result.error, /login item unavailable/);
+  assert.deepEqual(result.snapshot, harness.snapshot);
+  assert.equal(harness.calls.some(([name]) => name === 'updateSettings'), false);
+});
+
+test('settings commands refresh the native shell only after the state is persisted', async () => {
+  const harness = createHarness();
+  register(harness);
+
+  await invoke(harness, 'settings:set-close-to-tray', false);
+
+  assert.deepEqual(harness.calls.map(([name]) => name), ['updateSettings', 'save', 'syncSettings']);
+});
+
+test('failed settings commands do not refresh the native shell', async () => {
+  const harness = createHarness({
+    engine: { updateSettings: () => ({ ok: false, error: '领域拒绝', snapshot: { marker: 'same' } }) }
+  });
+  register(harness);
+
+  const result = await invoke(harness, 'settings:set-close-to-tray', false);
+
+  assert.equal(result.ok, false);
+  assert.equal(harness.calls.some(([name]) => name === 'syncSettings'), false);
+});
+
+test('desktop window mode is accepted and reports the approximation notice', async () => {
+  const harness = createHarness({
+    shell: { setWindowMode: () => ({ ok: true, mode: 'desktop', notice: '桌面层级是近似实现。' }) }
+  });
+  register(harness);
+
+  const result = await invoke(harness, 'settings:set-window-mode', 'desktop');
+
+  assert.equal(result.ok, true);
+  assert.equal(result.notice, '桌面层级是近似实现。');
+  assert.deepEqual(harness.calls.filter(([name]) => name === 'updateSettings'), [
+    ['updateSettings', { windowMode: 'desktop' }]
+  ]);
+});
+
+test('a window mode the native layer rejects is never persisted', async () => {
+  const harness = createHarness({
+    shell: { setWindowMode: () => ({ ok: false, error: '窗口还没有创建，无法切换层级。' }) }
+  });
+  register(harness);
+
+  const result = await invoke(harness, 'settings:set-window-mode', 'topmost');
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /窗口/);
+  assert.deepEqual(result.snapshot, harness.snapshot);
+  assert.equal(harness.calls.some(([name]) => name === 'updateSettings'), false);
+});
+
+test('a login item the system rejects is never persisted', async () => {
+  const harness = createHarness({
+    shell: {
+      setLaunchAtLogin: () => ({ ok: false, effective: false, error: '系统没有接受开机启动设置。' })
+    }
+  });
+  register(harness);
+
+  const result = await invoke(harness, 'settings:set-launch-at-login', true);
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /开机启动/);
   assert.deepEqual(result.snapshot, harness.snapshot);
   assert.equal(harness.calls.some(([name]) => name === 'updateSettings'), false);
 });

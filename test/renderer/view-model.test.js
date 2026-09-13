@@ -242,16 +242,21 @@ test('deriveSettingsView 投影透明度与窗口层级', () => {
   assert.equal(view.windowMode, 'topmost');
   assert.deepEqual(view.windowModes, [
     { value: 'normal', label: '普通', selected: false },
-    { value: 'topmost', label: '置顶', selected: true }
+    { value: 'topmost', label: '置顶', selected: true },
+    { value: 'desktop', label: '桌面', selected: false }
   ]);
   assert.equal(view.closeToTray, true);
   assert.equal(view.launchAtLogin, false);
 });
 
-test('deriveSettingsView 在窗口模式非法时回落到普通模式', () => {
-  const view = deriveSettingsView(makeHistorySnapshot([], { windowMode: 'desktop' }));
-  assert.equal(view.windowMode, 'normal');
-  assert.deepEqual(view.windowModes.map((mode) => mode.selected), [true, false]);
+test('deriveSettingsView 保留桌面模式，并在未知模式下回落到普通模式', () => {
+  const desktop = deriveSettingsView(makeHistorySnapshot([], { windowMode: 'desktop' }));
+  assert.equal(desktop.windowMode, 'desktop');
+  assert.deepEqual(desktop.windowModes.map((mode) => mode.selected), [false, false, true]);
+
+  const unknown = deriveSettingsView(makeHistorySnapshot([], { windowMode: 'floating-magic' }));
+  assert.equal(unknown.windowMode, 'normal');
+  assert.deepEqual(unknown.windowModes.map((mode) => mode.selected), [true, false, false]);
 });
 
 test('deriveSettingsView 夹紧越界的透明度，并在缺值时使用默认值', () => {

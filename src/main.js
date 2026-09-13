@@ -1,18 +1,30 @@
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { app, BrowserWindow, dialog, ipcMain, shell: electronShell } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  Menu,
+  Tray,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  shell: electronShell
+} = require('electron');
 const { createState } = require('./domain/state-schema');
 const { createDailyTodoEngine } = require('./domain/daily-todo-engine');
 const { JsonStateStore } = require('./infrastructure/json-state-store');
 const { registerIpc } = require('./electron/ipc');
 const { formatLocalInstant } = require('./electron/local-time');
+const { createShellController } = require('./electron/shell-controller');
 const { createWindowController } = require('./electron/window-controller');
 
 let engine = null;
 let store = null;
 let windowController = null;
+let shellController = null;
 let ipcRegistration = null;
 const isSmokeTest = process.argv.includes('--smoke-test');
+const trayIconPath = path.join(__dirname, '..', 'assets', 'tray.png');
 const runtimeWarnings = [];
 let hasUnsavedChanges = false;
 let currentSaveError = null;
@@ -148,16 +160,54 @@ function createShellAdapter() {
   return Object.freeze({
     openPath: (directory) => electronShell.openPath(directory),
     setWindowMode(mode) {
-      if (mode === 'desktop') throw new Error('桌面模式将在原生壳层阶段启用。');
-      const window = windowController.getWindow();
-      window.setAlwaysOnTop(mode === 'topmost', 'floating');
+      const result = shellController.setWindowMode(mode);
+      if (!result.ok) throw new Error(result.error);
+      return result;
     },
     setLaunchAtLogin(enabled) {
-      app.setLoginItemSettings({ openAtLogin: enabled });
+      const result = shellController.setLaunchAtLogin(enabled);
+      if (!result.ok) throw new Error(result.error);
+      return result;
     },
     minimize: () => windowController.minimize(),
-    close: () => windowController.close()
+    close: () => windowController.close(),
+    // 设置写盘之后才让托盘菜单读新值，否则菜单会显示成旧状态。
+    syncSettings: () => shellController.refreshMenu()
   });
+}
+
+function persistSettings(patch) {
+  const result = engine.updateSettings(patch);
+  if (!result.ok) throw new Error(result.error);
+  store.save(result.snapshot);
+  markSaved();
+  return result.snapshot;
+}
+
+/**
+ * 托盘菜单发出的意图。和 IPC 路径的区别是这里没有渲染进程参与，
+ * 所以组合根要自己完成「先让系统生效，再写盘，最后刷新菜单」。
+ */
+async function handleShellIntent(intent) {
+  try {
+    if (intent.type === 'window-mode') {
+      const applied = shellController.setWindowMode(intent.mode);
+      if (!applied.ok) throw new Error(applied.error);
+      persistSettings({ windowMode: intent.mode });
+    } else if (intent.type === 'launch-at-login') {
+      // 系统拒绝时抛错，于是这一项永远不会被写进配置。
+      const applied = shellController.setLaunchAtLogin(intent.enabled);
+      if (!applied.ok) throw new Error(applied.error);
+      persistSettings({ launchAtLogin: intent.enabled });
+    } else if (intent.type === 'close-to-tray') {
+      persistSettings({ closeToTray: intent.enabled });
+    }
+  } catch (error) {
+    console.error('[DoTodo shell]', error);
+    addWarning(`托盘操作没有生效：${error.message}`);
+  } finally {
+    shellController.refreshMenu();
+  }
 }
 
 function prepareCurrentDay() {
@@ -205,6 +255,21 @@ async function initialize() {
   }
 
   createAppWindow();
+
+  shellController = createShellController({
+    app,
+    Tray,
+    Menu,
+    globalShortcut,
+    iconPath: trayIconPath,
+    platform: process.platform,
+    getWindow: () => windowController.getWindow(),
+    getSettings: () => engine.getSnapshot().settings,
+    onCommand: handleShellIntent,
+    onError: (error) => console.error('[DoTodo shell]', error)
+  });
+  for (const warning of shellController.initialize().warnings) addWarning(warning);
+
   ipcRegistration = registerIpc({
     ipcMain,
     engine,
@@ -242,5 +307,6 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   ipcRegistration?.dispose();
+  shellController?.dispose();
   windowController?.dispose();
 });

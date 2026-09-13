@@ -9,6 +9,7 @@
     "start": "electron .",
     "test": "node --test \"test/**/*.test.js\"",
     "smoke": "node tools/run-smoke.js",
+    "icons": "node tools/make-tray-icon.js",
     "pack": "electron-builder --dir",
     "dist:win": "electron-builder --win nsis",
     "dist:mac": "electron-builder --mac dmg zip",

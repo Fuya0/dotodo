@@ -1,5 +1,7 @@
 const path = require('node:path');
 
+const WINDOW_MODES = Object.freeze(['normal', 'topmost', 'desktop']);
+
 const CHANNELS = Object.freeze({
   getSnapshot: 'state:get-snapshot',
   getStatus: 'app:get-status',
@@ -107,6 +109,16 @@ function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareSt
     return runCommand(() => engine.undo(token));
   });
 
+  /**
+   * 原生设置生效且成功落盘之后，才让壳层重建托盘菜单。
+   * 顺序不能颠倒，否则菜单会显示成还没写盘的旧值。
+   */
+  function afterNativeChange(result, nativeResult) {
+    if (result.ok !== true) return result;
+    if (typeof shell.syncSettings === 'function') shell.syncSettings(result.snapshot.settings);
+    return nativeResult?.notice ? { ...result, notice: nativeResult.notice } : result;
+  }
+
   handleState(CHANNELS.setBackgroundOpacity, (_event, value) => {
     if (!Number.isFinite(value) || value < 0.55 || value > 1) {
       return invalidInput('背景透明度必须在 0.55 到 1 之间。');
@@ -115,20 +127,23 @@ function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareSt
   });
 
   handleState(CHANNELS.setWindowMode, async (_event, value) => {
-    if (!['normal', 'topmost', 'desktop'].includes(value)) return invalidInput('窗口模式无效。');
-    await shell.setWindowMode(value);
-    return runCommand(() => engine.updateSettings({ windowMode: value }));
+    if (!WINDOW_MODES.includes(value)) return invalidInput('窗口模式无效。');
+    const applied = await shell.setWindowMode(value);
+    if (applied && applied.ok === false) return failure(applied.error, engine.getSnapshot());
+    return afterNativeChange(runCommand(() => engine.updateSettings({ windowMode: value })), applied);
   });
 
   handleState(CHANNELS.setCloseToTray, (_event, value) => {
     if (typeof value !== 'boolean') return invalidInput('关闭到托盘设置必须是布尔值。');
-    return runCommand(() => engine.updateSettings({ closeToTray: value }));
+    return afterNativeChange(runCommand(() => engine.updateSettings({ closeToTray: value })), null);
   });
 
   handleState(CHANNELS.setLaunchAtLogin, async (_event, value) => {
     if (typeof value !== 'boolean') return invalidInput('开机启动设置必须是布尔值。');
-    await shell.setLaunchAtLogin(value);
-    return runCommand(() => engine.updateSettings({ launchAtLogin: value }));
+    const applied = await shell.setLaunchAtLogin(value);
+    // 系统没有接受就不要落盘，否则界面会显示一个其实没生效的开关。
+    if (applied && applied.ok === false) return failure(applied.error, engine.getSnapshot());
+    return afterNativeChange(runCommand(() => engine.updateSettings({ launchAtLogin: value })), null);
   });
 
   handle(CHANNELS.importData, async () => {
