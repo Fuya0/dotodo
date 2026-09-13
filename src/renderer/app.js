@@ -48,6 +48,9 @@ const dom = {
   windowModeGroup: document.querySelector('#windowModeGroup'),
   closeToTrayToggle: document.querySelector('#closeToTrayToggle'),
   launchAtLoginToggle: document.querySelector('#launchAtLoginToggle'),
+  importButton: document.querySelector('#importButton'),
+  exportButton: document.querySelector('#exportButton'),
+  openFolderButton: document.querySelector('#openFolderButton'),
   layerButton: document.querySelector('#layerButton'),
   minimizeButton: document.querySelector('#minimizeButton'),
   closeButton: document.querySelector('#closeButton')
@@ -80,7 +83,7 @@ async function runCommand(promise) {
   if (!result || result.cancelled) return null;
   if (result.ok === false) showMessage(result.error);
   // 主进程可以附带一段说明（例如桌面层级只是近似实现），界面负责如实转述。
-  if (result.notice) showMessage(result.notice);
+  if (result.notice) showMessage(result.notice, 'info');
   if (result.snapshot) applySnapshot(result.snapshot);
   return result;
 }
@@ -591,6 +594,21 @@ dom.layerButton.addEventListener('click', () => {
 dom.minimizeButton.addEventListener('click', () => window.dotodo.minimizeWindow());
 dom.closeButton.addEventListener('click', () => window.dotodo.closeWindow());
 
+/* ---------- 数据导入导出 ---------- */
+
+dom.importButton.addEventListener('click', async () => {
+  const result = await runCommand(window.dotodo.importData());
+  // 用户点了取消不是错误，静默返回就好。
+  if (result && result.ok) showMessage('导入完成，当前清单已被导入的数据替换。', 'info');
+});
+
+dom.exportButton.addEventListener('click', async () => {
+  const result = await runCommand(window.dotodo.exportData());
+  if (result && result.ok && result.path) showMessage(`已导出到：${result.path}`, 'info');
+});
+
+dom.openFolderButton.addEventListener('click', () => runCommand(window.dotodo.openDataFolder()));
+
 function isSettingsOpen() {
   return !dom.settingsPanel.hidden;
 }
@@ -615,9 +633,10 @@ document.addEventListener('click', () => setSettingsOpen(false));
 
 /* ---------- 提示条 ---------- */
 
-function showMessage(message) {
+function showMessage(message, tone = 'error') {
   if (!message) return;
   dom.errorArea.textContent = message;
+  dom.errorArea.classList.toggle('is-info', tone === 'info');
   dom.errorArea.hidden = false;
   clearTimeout(state.messageTimer);
   state.messageTimer = setTimeout(() => {

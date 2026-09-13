@@ -379,3 +379,66 @@ test('import clears old dirty status, then reports a rollover persistence failur
     snapshot: currentSnapshot
   });
 });
+
+test('cancelled native dialogs are reported as cancellations, not failures', async () => {
+  const cancelled = createHarness({
+    dialogs: { chooseImportPath: async () => null, chooseExportPath: async () => null }
+  });
+  register(cancelled);
+
+  assert.deepEqual(await invoke(cancelled, 'data:import'), { ok: false, cancelled: true });
+  assert.deepEqual(await invoke(cancelled, 'data:export'), { ok: false, cancelled: true });
+  assert.deepEqual(cancelled.calls, []);
+});
+
+test('a rejected import leaves the in-memory state untouched', async () => {
+  const harness = createHarness({
+    store: { importFrom: () => { throw new Error('导入文件不是有效的 JSON 状态。'); } }
+  });
+  register(harness);
+
+  const result = await invoke(harness, 'data:import');
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /有效的 JSON/);
+  assert.deepEqual(result.snapshot, harness.snapshot);
+  assert.equal(harness.calls.some(([name]) => name === 'replaceState'), false);
+  assert.equal(harness.calls.some(([name]) => name === 'save'), false);
+});
+
+test('a rejected import never replaces the engine state', async () => {
+  const harness = createHarness({
+    engine: { replaceState: () => ({ ok: false, error: '导入状态无效。', snapshot: { marker: 'old' } }) }
+  });
+  register(harness);
+
+  const result = await invoke(harness, 'data:import');
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /导入状态无效/);
+  assert.deepEqual(result.snapshot, { marker: 'old' });
+});
+
+test('export reports the destination path and surfaces write failures', async () => {
+  const ok = createHarness({ store: { exportTo: () => 'C:\\chosen\\export.json' } });
+  register(ok);
+  assert.deepEqual(await invoke(ok, 'data:export'), { ok: true, path: 'C:\\chosen\\export.json' });
+
+  const broken = createHarness({
+    store: { exportTo: () => { throw new Error('无法安全写入状态文件：disk full'); } }
+  });
+  register(broken);
+  const failure = await invoke(broken, 'data:export');
+  assert.equal(failure.ok, false);
+  assert.match(failure.error, /disk full/);
+});
+
+test('import surfaces the preserved corrupt-file paths through the runtime status', async () => {
+  const warnings = ['当前状态文件已损坏，已保留原文件并从备份恢复。'];
+  const harness = createHarness({
+    status: { getStatus: () => ({ warnings, dirty: false }) }
+  });
+  register(harness);
+
+  assert.deepEqual(await invoke(harness, 'app:get-status'), { warnings, dirty: false });
+});

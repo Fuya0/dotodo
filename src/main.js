@@ -234,6 +234,10 @@ async function initialize() {
   store = new JsonStateStore(app.getPath('userData'));
   const loaded = store.load();
   if (loaded.warning) addWarning(loaded.warning);
+  // 恢复过程的证据要说到具体路径：只告诉用户「文件损坏了」等于让他自己去翻目录。
+  for (const preservedPath of loaded.preservedCorruptFiles) {
+    addWarning(`损坏的原文件已保留在：${preservedPath}`);
+  }
   if (!loaded.writable) hasUnsavedChanges = true;
   const now = formatLocalInstant();
   const initialState = loaded.state || createState(now.slice(0, 10));

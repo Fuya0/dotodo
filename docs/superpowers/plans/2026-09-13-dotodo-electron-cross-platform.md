@@ -438,36 +438,49 @@ git commit -m "feat: integrate Electron native desktop shell"
 - Consumes: store import/export and shell APIs.
 - Produces: repeatable `npm run verify:win` validation.
 
-- [ ] **Step 1: Add IPC tests for dialog cancellation, invalid import and export failure**
+- [x] **Step 1: Add IPC tests for dialog cancellation, invalid import and export failure**
 
 Use injected dialog and shell adapters; never automate native dialogs in unit tests.
 
-- [ ] **Step 2: Implement import/export/open-folder IPC and UI feedback**
+- [x] **Step 2: Implement import/export/open-folder IPC and UI feedback**
+
+The IPC layer already handled cancellation and rejection correctly, so this step added the settings
+panel entries, an info tone for success messages, and startup warnings that name the exact preserved
+corrupt-file paths.
 
 Surface exact preserved corrupt-file paths and keep current in-memory state unchanged after invalid import.
 
-- [ ] **Step 3: Add a deterministic smoke mode**
+- [x] **Step 3: Add a deterministic smoke mode**
 
 Use an isolated temporary user-data directory, load the renderer, report readiness and exit with code `0`; do not touch real user data.
 
-- [ ] **Step 4: Write the Windows verification script**
+- [x] **Step 4: Write the Windows verification script**
+
+`tools/verify-electron.ps1` targets Windows PowerShell 5.1 (this machine has no `pwsh`) and is saved
+as UTF-8 with BOM, because 5.1 reads BOM-less scripts using the system ANSI code page. Verified end
+to end for the environment, size-classification and summary steps; the test and smoke steps run only
+on a machine that can start Electron.
 
 The script runs `npm test`, smoke, packaged-directory build, file inventory, installer-independent unpacked size and idle memory measurement.
 
-- [ ] **Step 5: Write the manual acceptance checklist**
+- [x] **Step 5: Write the manual acceptance checklist**
 
 Cover Windows 10/11, 100%/150%/mixed DPI, multiple monitors, tray, shortcut collision, Explorer restart, login item, rollover and data recovery.
 
-- [ ] **Step 6: Run complete automated verification**
+- [x] **Step 6: Run complete automated verification**
 
 Run: `npm run verify:win`
 Expected: all tests pass, smoke exits `0`, and size figures are reported by category.
 
-- [ ] **Step 7: Write lesson 07 and testing exercises**
+Partially verified: the script itself runs and reports categories and failures correctly, but
+`npm test` and `npm run smoke` hit the agent sandbox's `spawn EPERM` boundary. The user runs the full
+pipeline locally.
+
+- [x] **Step 7: Write lesson 07 and testing exercises**
 
 Teach unit/integration/smoke/manual test boundaries, test doubles, deterministic clocks, temporary directories and reading process memory.
 
-- [ ] **Step 8: Commit Task 7**
+- [x] **Step 8: Commit Task 7**
 
 ```bash
 git add src package.json tools docs/testing docs/learning/electron/07-debug-test-verify.md exercises/electron/07-testing test

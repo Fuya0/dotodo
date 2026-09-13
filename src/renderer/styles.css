@@ -211,7 +211,15 @@ input:focus-visible {
   background: var(--danger-soft);
   font-size: 11px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
   animation: arrive var(--ease);
+}
+
+/* 同一块区域也用来报「做成了什么」，只是换成强调色而不是危险色。 */
+.error-area.is-info {
+  border-color: var(--accent-ring);
+  color: var(--ink-dim);
+  background: var(--accent-soft);
 }
 
 /* ---------- 主内容 ---------- */
@@ -869,6 +877,11 @@ kbd {
   color: #04121e;
   background: var(--accent);
   font-weight: 650;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 6px;
 }
 
 .switch-row {
