@@ -70,7 +70,7 @@ function createAppWindow() {
   windowController = createWindowController({
     BrowserWindow,
     preloadPath: path.join(__dirname, 'preload.js'),
-    htmlPath: path.join(__dirname, 'index.html'),
+    htmlPath: path.join(__dirname, 'renderer', 'index.html'),
     bounds: snapshot.windowBounds,
     windowMode: snapshot.settings.windowMode,
     onBoundsChanged: persistBounds,
@@ -99,7 +99,16 @@ function createAppWindow() {
         const ready = await smokeWindow.webContents.executeJavaScript(`
           (async () => {
             const state = await window.dotodo.getSnapshot();
-            return Boolean(state?.activeDay?.date && document.querySelector('#todoForm'));
+            const dateLabel = document.querySelector('#dateLabel')?.textContent ?? '';
+            const progress = document.querySelector('#progressLabel')?.textContent ?? '';
+            return Boolean(
+              state?.activeDay?.date &&
+              document.querySelector('#todoForm') &&
+              document.querySelector('#todoList') &&
+              document.querySelector('#settingsPanel') &&
+              dateLabel.length > 0 &&
+              /^\\d+ \\/ \\d+$/.test(progress)
+            );
           })()
         `);
         if (!ready) throw new Error('Renderer 或 Preload 未准备完成。');

@@ -145,11 +145,11 @@ engine.getState().history[0].tasks[0].text = '偷偷修改历史';
 
 ## 运行本课测试
 
-在 Electron 工作树中执行：
+在仓库根目录执行：
 
 ```powershell
-cd F:\杂\转开发\DoTodo\.worktrees\electron-v1
-node --test test/domain/state-schema.test.js test/domain/daily-todo-engine.test.js
+cd F:\杂\转开发\DoTodo
+npm test
 ```
 
 测试目前覆盖创建状态、拷贝隔离、完整校验、Today 操作、历史只读、限时撤销、跨日、时钟回拨、任务延续和交错删除。

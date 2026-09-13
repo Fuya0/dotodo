@@ -1,0 +1,678 @@
+/*
+ * DoTodo 视觉系统：深色玻璃悬浮卡片。
+ *
+ * 关键约定：窗口本身是透明的（BrowserWindow transparent: true），整窗不再使用
+ * setOpacity。玻璃感只由 `.app-shell::before` 这一层背景承担，它的 alpha 来自
+ * `--surface-opacity`。所有文字和控件都是这个背景层之上的独立元素，永远保持
+ * 完全不透明，所以把背景调到 55% 也不会让字变淡。
+ */
+
+:root {
+  --surface-color: #0c1424;
+  --surface-opacity: 0.82;
+
+  --ink: #e9eff8;
+  --ink-dim: #aab9ce;
+  --muted: #7c8da6;
+
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
+
+  --accent: #38bdf8;
+  --accent-soft: rgba(56, 189, 248, 0.14);
+  --accent-ring: rgba(56, 189, 248, 0.38);
+
+  --done: #4ade9b;
+  --done-soft: rgba(74, 222, 155, 0.16);
+
+  --danger: #f4796b;
+  --danger-soft: rgba(244, 121, 107, 0.14);
+
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.34);
+  --radius: 20px;
+  --ease: 200ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  padding: 8px;
+  color: var(--ink);
+  font-family: "Segoe UI Variable Text", "SF Pro Text", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
+  font-size: 13px;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+output {
+  font: inherit;
+  color: inherit;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+/* ---------- 玻璃外壳 ---------- */
+
+.app-shell {
+  position: relative;
+  display: grid;
+  grid-template-rows: 46px minmax(0, 1fr) 38px;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* 唯一的玻璃背景层：只有它的 alpha 会随设置变化。 */
+.app-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: var(--surface-color);
+  opacity: var(--surface-opacity);
+  transition: opacity var(--ease);
+}
+
+.app-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- 标题栏 ---------- */
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid var(--line);
+  -webkit-app-region: drag;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 7px;
+  background: linear-gradient(150deg, var(--accent), #2563eb);
+  box-shadow: 0 4px 10px rgba(56, 189, 248, 0.28);
+}
+
+.brand-mark i {
+  width: 9px;
+  height: 5px;
+  border-left: 1.8px solid #06121f;
+  border-bottom: 1.8px solid #06121f;
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+.window-actions {
+  display: flex;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  color: var(--ink-dim);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--ease), color var(--ease);
+}
+
+.icon-button:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.icon-button[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.close-button:hover {
+  color: #1b0b09;
+  background: var(--danger);
+}
+
+.icon-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- 运行期提示与错误 ---------- */
+
+.runtime-warning {
+  position: absolute;
+  z-index: 20;
+  top: 46px;
+  left: 8px;
+  right: 8px;
+  padding: 8px 12px;
+  border: 1px solid rgba(244, 121, 107, 0.32);
+  border-radius: 12px;
+  color: #ffd9d3;
+  background: rgba(120, 38, 32, 0.94);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.error-area {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid rgba(244, 121, 107, 0.32);
+  border-radius: 11px;
+  color: #ffd9d3;
+  background: var(--danger-soft);
+  font-size: 11px;
+  line-height: 1.5;
+  animation: arrive var(--ease);
+}
+
+/* ---------- 主内容 ---------- */
+
+.content {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: 16px 18px 0;
+  overflow: hidden;
+}
+
+.hero {
+  padding-bottom: 14px;
+}
+
+.eyebrow {
+  margin: 0 0 3px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+}
+
+.heading-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.progress-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-track {
+  height: 3px;
+  margin-top: 11px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.progress-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--done), var(--accent));
+  transition: width var(--ease);
+}
+
+/* ---------- 添加表单 ---------- */
+
+.todo-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 4px 4px 4px 13px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.05);
+  transition: border-color var(--ease), box-shadow var(--ease);
+  -webkit-app-region: no-drag;
+}
+
+.todo-form:focus-within {
+  border-color: var(--accent-ring);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.add-icon {
+  color: var(--accent);
+  font-size: 20px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.todo-form input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  color: var(--ink);
+  background: transparent;
+  user-select: text;
+}
+
+.todo-form input::placeholder {
+  color: var(--muted);
+}
+
+.todo-form button {
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  color: #04121e;
+  background: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter var(--ease), transform 120ms ease;
+}
+
+.todo-form button:hover {
+  filter: brightness(1.08);
+}
+
+.todo-form button:active {
+  transform: scale(0.96);
+}
+
+/* ---------- 任务列表 ---------- */
+
+.todo-list {
+  min-height: 0;
+  flex: 1;
+  padding: 8px 2px 10px 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+.todo-row {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto 28px;
+  align-items: center;
+  gap: 6px;
+  min-height: 46px;
+  padding-left: 2px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 9px;
+  animation: arrive var(--ease);
+}
+
+.todo-row:focus-visible {
+  outline: none;
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.check-button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1.5px solid var(--muted);
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color var(--ease), background var(--ease);
+}
+
+.check-button svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: #04121e;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity var(--ease), transform var(--ease);
+}
+
+.check-button:hover {
+  border-color: var(--accent);
+}
+
+.todo-row.completed .check-button {
+  border-color: var(--done);
+  background: var(--done);
+}
+
+.todo-row.completed .check-button svg {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.todo-text {
+  padding: 10px 2px;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+  cursor: text;
+}
+
+.completed .todo-text {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.continue-badge {
+  padding: 2px 6px;
+  border: 1px solid var(--accent-ring);
+  border-radius: 6px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.edit-input {
+  width: 100%;
+  padding: 8px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--accent);
+  outline: 0;
+  color: var(--ink);
+  background: transparent;
+  user-select: text;
+}
+
+.delete-button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--ease), color var(--ease), background var(--ease);
+}
+
+.todo-row:hover .delete-button,
+.todo-row:focus-within .delete-button,
+.delete-button:focus-visible {
+  opacity: 1;
+}
+
+.delete-button:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.delete-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+
+/* ---------- 空状态 ---------- */
+
+.empty-state {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 26px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty-check {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(74, 222, 155, 0.24);
+  border-radius: 17px;
+  background: var(--done-soft);
+  transform: rotate(-3deg);
+}
+
+.empty-check span {
+  width: 17px;
+  height: 9px;
+  border-left: 2px solid var(--done);
+  border-bottom: 2px solid var(--done);
+  transform: translateY(-2px) rotate(-45deg);
+}
+
+.empty-state h2 {
+  margin: 0 0 5px;
+  color: var(--ink-dim);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 11px;
+}
+
+/* ---------- 底部标签 ---------- */
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 14px;
+  border-top: 1px solid var(--line);
+}
+
+.tab {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+  transition: color var(--ease), background var(--ease);
+}
+
+.tab:hover:not(:disabled) {
+  color: var(--ink-dim);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tab.is-active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 650;
+}
+
+.tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tab-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  font: inherit;
+}
+
+/* ---------- 撤销条 ---------- */
+
+.undo-bar {
+  position: absolute;
+  z-index: 15;
+  right: 12px;
+  bottom: 46px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 10px 9px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 13px;
+  color: var(--ink-dim);
+  background: rgba(18, 28, 46, 0.97);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+  font-size: 11px;
+  animation: arrive var(--ease);
+}
+
+.undo-bar button {
+  padding: 5px 11px;
+  border: 1px solid var(--accent-ring);
+  border-radius: 8px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.undo-bar button:hover {
+  color: #04121e;
+  background: var(--accent);
+}
+
+/* ---------- 设置面板 ---------- */
+
+.settings-panel {
+  position: absolute;
+  z-index: 18;
+  top: 50px;
+  right: 10px;
+  width: 232px;
+  padding: 6px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 15px;
+  background: rgba(18, 28, 46, 0.98);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.46);
+  animation: arrive 160ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  font-size: 12px;
+}
+
+.setting-row + .setting-row {
+  border-top: 1px solid var(--line);
+}
+
+.range-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.range-wrap input {
+  width: 88px;
+  accent-color: var(--accent);
+}
+
+.range-wrap output {
+  width: 32px;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -253,6 +253,7 @@ git commit -m "feat: establish secure Electron process boundary"
 - Move/Rewrite: `src/renderer.js` to `src/renderer/app.js`
 - Move/Rewrite: `src/styles.css` to `src/renderer/styles.css`
 - Create: `test/renderer/view-model.test.js`
+- Create: `test/renderer/markup.test.js`
 - Create: `src/renderer/view-model.js`
 - Create: `docs/learning/electron/04-browser-window-and-glass-ui.md`
 - Create: `exercises/electron/04-renderer/README.md`
@@ -262,40 +263,45 @@ git commit -m "feat: establish secure Electron process boundary"
 - Consumes: `window.dotodo` API and state snapshots.
 - Produces: `deriveTodayView(snapshot)` and DOM rendering for the Today page.
 
-- [ ] **Step 1: Read the approved reference image and define CSS tokens**
+- [x] **Step 1: Define CSS tokens from the design document's visual section**
 
 Use dark navy glass, cyan accent, mint completion, coral danger, 1px translucent borders and fully opaque foreground text.
 
-- [ ] **Step 2: Write failing renderer view-model tests**
+- [x] **Step 2: Write failing renderer view-model tests**
 
 Assert date label, completed/total counts, progress ratio, empty state and task row projection from a snapshot.
 
-- [ ] **Step 3: Implement the pure renderer view-model and pass tests**
+- [x] **Step 3: Implement the pure renderer view-model and pass tests**
 
 Run: `node --test test/renderer/view-model.test.js`.
 
-- [ ] **Step 4: Build semantic Today HTML**
+- [x] **Step 4: Build semantic Today HTML**
 
 Use a draggable header, right-aligned layer/settings/minimize/close controls, progress, add form, task list, error area, undo area and Today/History tabs.
 
-- [ ] **Step 5: Implement glass CSS without whole-window opacity**
+- [x] **Step 5: Implement glass CSS without whole-window opacity**
 
 `BrowserWindow` stays transparent. A background pseudo-element receives `--surface-opacity`; the content subtree remains at opacity `1`.
 
-- [ ] **Step 6: Wire Today commands and keyboard behavior**
+- [x] **Step 6: Wire Today commands and keyboard behavior**
 
 Enter adds, Space toggles the selected task, F2/double-click edits, Delete removes, Escape cancels editing, and all results re-render from the returned snapshot.
 
-- [ ] **Step 7: Run renderer tests and smoke mode**
+- [x] **Step 7: Run renderer tests and smoke mode**
 
-Run: `node --test test/renderer/*.test.js`
+Run: `node test/renderer/view-model.test.js test/renderer/markup.test.js`
 Run: `npm run smoke`
 
-- [ ] **Step 8: Write lesson 04 and renderer exercises**
+Note: today's deletion undo bar and the two-state layer toggle were wired here so the intermediate
+build is not destructive; lesson 05 still owns the History page, drag reorder and full settings.
+`npm run smoke` cannot run inside the agent sandbox (`spawn EPERM` on piped stdio) and is verified
+by the user locally.
+
+- [x] **Step 8: Write lesson 04 and renderer exercises**
 
 Teach transparent BrowserWindow composition, CSS alpha versus window opacity, DOM creation, event delegation, accessibility names and `Array.prototype.map/filter/find` in UI projection.
 
-- [ ] **Step 9: Commit Task 4**
+- [x] **Step 9: Commit Task 4**
 
 ```bash
 git add src/renderer src/electron/window-controller.js test/renderer docs/learning/electron/04-browser-window-and-glass-ui.md exercises/electron/04-renderer src/index.html src/renderer.js src/styles.css

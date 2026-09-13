@@ -149,8 +149,8 @@ constructor(directory, { copyFileSync = fs.copyFileSync } = {})
 ## 运行测试
 
 ```powershell
-cd F:\杂\转开发\DoTodo\.worktrees\electron-v1
-node --test test/infrastructure/json-state-store.test.js
+cd F:\杂\转开发\DoTodo
+node test/infrastructure/json-state-store.test.js
 ```
 
 测试使用 `fs.mkdtempSync` 创建唯一目录，并且只清理测试自己创建的准确路径，不接触真实用户数据。
