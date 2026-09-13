@@ -146,39 +146,39 @@ git commit -m "feat: build JavaScript daily todo domain"
 - Consumes: `validateState(value)`, `cloneState(value)`.
 - Produces: `new JsonStateStore(directory)` with `load()`, `save(state)`, `importFrom(sourcePath)`, `exportTo(destinationPath,state)`, `getPaths()`.
 
-- [ ] **Step 1: Write failing save/load round-trip and reference-isolation tests**
+- [x] **Step 1: Write failing save/load round-trip and reference-isolation tests**
 
 Use a unique directory under `os.tmpdir()` and remove only that exact directory in test cleanup.
 
-- [ ] **Step 2: Run the storage test and verify the module is missing**
+- [x] **Step 2: Run the storage test and verify the module is missing**
 
 Run: `node --test test/infrastructure/json-state-store.test.js`
 
-- [ ] **Step 3: Implement load and atomic save**
+- [x] **Step 3: Implement load and atomic save**
 
 Write `state.tmp.json`, fsync/close it, rotate `state.json` to `state.backup.json`, and rename the temporary file to `state.json`.
 
-- [ ] **Step 4: Add failing recovery tests**
+- [x] **Step 4: Add failing recovery tests**
 
 Cover missing primary, valid backup, corrupt primary, corrupt primary plus backup, and failure to preserve corrupt files.
 
-- [ ] **Step 5: Implement recovery without overwriting evidence**
+- [x] **Step 5: Implement recovery without overwriting evidence**
 
 Return `{ state, warning, preservedCorruptFiles, writable }`. If corrupt files cannot be preserved, block future save attempts.
 
-- [ ] **Step 6: Add failing import/export tests**
+- [x] **Step 6: Add failing import/export tests**
 
 Invalid imports must leave both memory and disk unchanged; valid imports must preserve the prior state as a backup.
 
-- [ ] **Step 7: Implement import/export and rerun all storage tests**
+- [x] **Step 7: Implement import/export and rerun all storage tests**
 
 Run: `node --test test/infrastructure/*.test.js`
 
-- [ ] **Step 8: Write lesson 02 and storage exercises**
+- [x] **Step 8: Write lesson 02 and storage exercises**
 
 Teach `fs`, `path`, async failure boundaries, JSON serialization, atomic replacement and backup semantics. Exercises implement a safe JSON reader and explain why writing directly to `state.json` can corrupt data.
 
-- [ ] **Step 9: Remove the superseded legacy store and commit**
+- [x] **Step 9: Remove the superseded legacy store and commit**
 
 ```bash
 git add src/infrastructure test/infrastructure docs/learning/electron/02-node-files-and-json.md exercises/electron/02-storage src/store.js test/store.test.js
