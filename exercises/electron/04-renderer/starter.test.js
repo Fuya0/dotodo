@@ -73,11 +73,19 @@ test('nextFocusIndex 处理空列表和越界的起点', () => {
   assert.equal(nextFocusIndex(-4, 3, 1), 0);
 });
 
-test('describeSurface 把透明度夹到 0.55–1 并给出百分比', () => {
-  assert.deepEqual(describeSurface(0.82), { value: 0.82, percent: 82, label: '82%', cssValue: '0.82' });
-  assert.deepEqual(describeSurface(0.1), { value: 0.55, percent: 55, label: '55%', cssValue: '0.55' });
-  assert.deepEqual(describeSurface(2), { value: 1, percent: 100, label: '100%', cssValue: '1' });
-  assert.deepEqual(describeSurface(0.825), { value: 0.825, percent: 83, label: '83%', cssValue: '0.825' });
+test('describeSurface 夹紧透明度并拼出 CSS 声明', () => {
+  assert.deepEqual(describeSurface(0.82), {
+    cssValue: '0.82', percent: 82, declaration: '--surface-opacity: 0.82'
+  });
+  assert.deepEqual(describeSurface(0.1), {
+    cssValue: '0.55', percent: 55, declaration: '--surface-opacity: 0.55'
+  });
+  assert.deepEqual(describeSurface(2), {
+    cssValue: '1', percent: 100, declaration: '--surface-opacity: 1'
+  });
+  assert.deepEqual(describeSurface(0.825), {
+    cssValue: '0.825', percent: 83, declaration: '--surface-opacity: 0.825'
+  });
 });
 
 test('describeSurface 对非数字返回 null', () => {
