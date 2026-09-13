@@ -11,10 +11,29 @@
 
 const WEEKDAY_NAMES = Object.freeze(['周日', '周一', '周二', '周三', '周四', '周五', '周六']);
 const LOCAL_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
 const EMPTY_COPY = Object.freeze({
   title: '清单空空的',
   copy: '写下一件小事，然后轻松完成它。'
 });
+
+const HISTORY_EMPTY_COPY = Object.freeze({
+  title: '还没有历史记录',
+  copy: '每过一天，当天的清单会完整留在这里。'
+});
+
+const DEFAULT_OPACITY = 0.82;
+const OPACITY_MIN = 0.55;
+const OPACITY_MAX = 1;
+
+/**
+ * 这一课只暴露主进程已经支持的两种层级。
+ * `desktop` 模式要等原生壳层那一步，界面不提前摆出点不动的按钮。
+ */
+const WINDOW_MODES = Object.freeze([
+  { value: 'normal', label: '普通' },
+  { value: 'topmost', label: '置顶' }
+]);
 
 /** 把 `2026-09-13` 变成 `9月13日 周日`；非法输入返回空字符串。 */
 function formatDateLabel(localDate) {
@@ -27,11 +46,7 @@ function formatDateLabel(localDate) {
 
 /** 把完整快照投影成 Today 页面需要的视图数据。 */
 function deriveTodayView(snapshot) {
-  if (!snapshot || typeof snapshot !== 'object' ||
-      !snapshot.activeDay || typeof snapshot.activeDay !== 'object' ||
-      !Array.isArray(snapshot.activeDay.tasks)) {
-    throw new TypeError('deriveTodayView 需要一个包含 activeDay.tasks 数组的快照。');
-  }
+  assertSnapshot(snapshot);
 
   const tasks = snapshot.activeDay.tasks.map(toTaskRow);
   const todayCount = tasks.length;
@@ -54,6 +69,69 @@ function deriveTodayView(snapshot) {
   };
 }
 
+/** 把历史日期投影成按日期倒序的只读列表。 */
+function deriveHistoryView(snapshot) {
+  assertSnapshot(snapshot);
+
+  const history = Array.isArray(snapshot.history) ? snapshot.history : [];
+  // 先复制再排序：sort 会就地修改数组，直接排快照里的 history 就破坏了「只读」约定。
+  const days = [...history].sort(compareDaysDescending).map(toHistoryDay);
+
+  return {
+    dayCount: days.length,
+    days,
+    isEmpty: days.length === 0,
+    empty: days.length === 0 ? { ...HISTORY_EMPTY_COPY } : null
+  };
+}
+
+/** 把设置投影成界面控件需要的值和选中状态。 */
+function deriveSettingsView(snapshot) {
+  assertSnapshot(snapshot);
+
+  const settings = snapshot.settings && typeof snapshot.settings === 'object' ? snapshot.settings : {};
+  const surface = describeSurface(settings.backgroundOpacity) ?? describeSurface(DEFAULT_OPACITY);
+  const windowMode = WINDOW_MODES.some((mode) => mode.value === settings.windowMode)
+    ? settings.windowMode
+    : WINDOW_MODES[0].value;
+
+  return {
+    backgroundOpacity: surface.value,
+    opacityPercent: surface.percent,
+    opacityLabel: `${surface.percent}%`,
+    opacityCssValue: surface.cssValue,
+    opacityMin: Math.round(OPACITY_MIN * 100),
+    opacityMax: Math.round(OPACITY_MAX * 100),
+    windowMode,
+    windowModes: WINDOW_MODES.map((mode) => ({ ...mode, selected: mode.value === windowMode })),
+    closeToTray: Boolean(settings.closeToTray),
+    launchAtLogin: Boolean(settings.launchAtLogin)
+  };
+}
+
+/**
+ * 拖拽落点：`midpoints` 是除被拖行之外每一行的垂直中点。
+ * 指针越过第 i 个中点就落到下一个位置，越过最后一个中点则落到末尾。
+ * 返回的是「移除被拖行之后」的下标，正好是 reorderTask 需要的目标位置。
+ */
+function resolveDropIndex(midpoints, clientY) {
+  if (!Array.isArray(midpoints) || midpoints.length === 0) return -1;
+  const index = midpoints.findIndex((midpoint) => clientY < midpoint);
+  return index === -1 ? midpoints.length - 1 : index;
+}
+
+/** 把透明度夹到合法区间，给出数字、百分比和 CSS 字符串。 */
+function describeSurface(value) {
+  const opacity = Number(value);
+  if (!Number.isFinite(opacity)) return null;
+  const clamped = Math.min(OPACITY_MAX, Math.max(OPACITY_MIN, opacity));
+  return {
+    value: clamped,
+    percent: Math.round(clamped * 100),
+    cssValue: String(clamped)
+  };
+}
+
 /** 一行任务只暴露界面真正需要的字段，顺序由 position 表达。 */
 function toTaskRow(task, position) {
   return {
@@ -67,6 +145,57 @@ function toTaskRow(task, position) {
   };
 }
 
+function toHistoryDay(day) {
+  const tasks = Array.isArray(day.tasks) ? day.tasks.map(toHistoryRow) : [];
+  const completedCount = tasks.filter((row) => row.completed).length;
+  return {
+    date: day.date,
+    dateLabel: formatDateLabel(day.date),
+    tasks,
+    taskCount: tasks.length,
+    completedCount,
+    progressLabel: `${completedCount} / ${tasks.length}`
+  };
+}
+
+function toHistoryRow(task, position) {
+  const completed = Boolean(task.completed);
+  const continuedOnward = Boolean(task.hasBeenContinued) || Boolean(task.continuedToTaskId);
+  return {
+    id: task.id,
+    position,
+    text: task.text,
+    completed,
+    isContinuedFrom: Boolean(task.continuedFromTaskId),
+    continuedFromDate: task.continuedFromDate ?? null,
+    canContinue: !completed && !continuedOnward,
+    statusLabel: historyStatusLabel(task, continuedOnward)
+  };
+}
+
+function historyStatusLabel(task, continuedOnward) {
+  if (continuedOnward) {
+    return task.continuedToDate ? `已延续到 ${formatDateLabel(task.continuedToDate)}` : '已延续过';
+  }
+  if (task.continuedFromTaskId && task.continuedFromDate) {
+    return `延续自 ${formatDateLabel(task.continuedFromDate)}`;
+  }
+  return null;
+}
+
+function compareDaysDescending(left, right) {
+  if (left.date === right.date) return 0;
+  return left.date < right.date ? 1 : -1;
+}
+
+function assertSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object' ||
+      !snapshot.activeDay || typeof snapshot.activeDay !== 'object' ||
+      !Array.isArray(snapshot.activeDay.tasks)) {
+    throw new TypeError('投影函数需要一个包含 activeDay.tasks 数组的状态快照。');
+  }
+}
+
 function isLocalDate(value) {
   if (typeof value !== 'string' || !LOCAL_DATE_PATTERN.test(value)) return false;
   const [year, month, day] = value.split('-').map(Number);
@@ -78,5 +207,11 @@ function isLocalDate(value) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { deriveTodayView, formatDateLabel };
+  module.exports = {
+    deriveTodayView,
+    deriveHistoryView,
+    deriveSettingsView,
+    formatDateLabel,
+    resolveDropIndex
+  };
 }

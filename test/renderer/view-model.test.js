@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { deriveTodayView, formatDateLabel } = require('../../src/renderer/view-model');
+const { deriveTodayView, deriveHistoryView, deriveSettingsView, formatDateLabel, resolveDropIndex } =
+  require('../../src/renderer/view-model');
 
 function makeTask(id, overrides = {}) {
   return {
@@ -26,6 +27,17 @@ function makeSnapshot(tasks) {
     settings: { backgroundOpacity: 0.82, windowMode: 'topmost', closeToTray: true, launchAtLogin: false },
     windowBounds: { width: 390, height: 610 }
   };
+}
+
+function makeDay(date, tasks) {
+  return { date, closedAt: `${date}T23:59:00.000+08:00`, tasks };
+}
+
+function makeHistorySnapshot(history, settings) {
+  const snapshot = makeSnapshot([]);
+  snapshot.history = history;
+  if (settings) snapshot.settings = { ...snapshot.settings, ...settings };
+  return snapshot;
 }
 
 test('formatDateLabel 输出本地月日与星期', () => {
@@ -123,4 +135,151 @@ test('deriveTodayView 拒绝结构不合法的快照', () => {
   assert.throws(() => deriveTodayView({}), TypeError);
   assert.throws(() => deriveTodayView({ activeDay: { date: '2026-09-13' } }), TypeError);
   assert.throws(() => deriveTodayView({ activeDay: { date: '2026-09-13', tasks: {} } }), TypeError);
+});
+
+/* ---------- History ---------- */
+
+test('deriveHistoryView 按日期倒序排列，不依赖输入顺序', () => {
+  const view = deriveHistoryView(makeHistorySnapshot([
+    makeDay('2026-09-11', [makeTask('a')]),
+    makeDay('2026-09-13', [makeTask('b')]),
+    makeDay('2026-09-12', [makeTask('c')])
+  ]));
+  assert.deepEqual(view.days.map((day) => day.date), ['2026-09-13', '2026-09-12', '2026-09-11']);
+  assert.deepEqual(view.days.map((day) => day.dateLabel), ['9月13日 周日', '9月12日 周六', '9月11日 周五']);
+  assert.equal(view.dayCount, 3);
+  assert.equal(view.isEmpty, false);
+  assert.equal(view.empty, null);
+});
+
+test('deriveHistoryView 统计每天的完成情况', () => {
+  const view = deriveHistoryView(makeHistorySnapshot([
+    makeDay('2026-09-12', [
+      makeTask('a', { completed: true, completedAt: '2026-09-12T09:00:00.000+08:00' }),
+      makeTask('b'),
+      makeTask('c', { completed: true, completedAt: '2026-09-12T10:00:00.000+08:00' })
+    ])
+  ]));
+  const day = view.days[0];
+  assert.equal(day.taskCount, 3);
+  assert.equal(day.completedCount, 2);
+  assert.equal(day.progressLabel, '2 / 3');
+  assert.deepEqual(day.tasks.map((row) => row.position), [0, 1, 2]);
+});
+
+test('deriveHistoryView 在空历史时给出空状态文案', () => {
+  const view = deriveHistoryView(makeHistorySnapshot([]));
+  assert.equal(view.isEmpty, true);
+  assert.equal(view.dayCount, 0);
+  assert.deepEqual(view.days, []);
+  assert.deepEqual(view.empty, { title: '还没有历史记录', copy: '每过一天，当天的清单会完整留在这里。' });
+});
+
+test('历史行只在未完成且从未延续时允许延续', () => {
+  const view = deriveHistoryView(makeHistorySnapshot([
+    makeDay('2026-09-12', [
+      makeTask('open'),
+      makeTask('done', { completed: true, completedAt: '2026-09-12T09:00:00.000+08:00' }),
+      makeTask('already', { hasBeenContinued: true, continuedToTaskId: 't-1', continuedToDate: '2026-09-13' }),
+      makeTask('linked', { continuedToTaskId: 't-2', continuedToDate: '2026-09-13' })
+    ])
+  ]));
+  const rows = view.days[0].tasks;
+  assert.equal(rows[0].canContinue, true);
+  assert.equal(rows[1].canContinue, false);
+  assert.equal(rows[2].canContinue, false);
+  assert.equal(rows[3].canContinue, false);
+});
+
+test('历史行给延续关系生成可读标签', () => {
+  const view = deriveHistoryView(makeHistorySnapshot([
+    makeDay('2026-09-12', [
+      makeTask('open'),
+      makeTask('done', { completed: true, completedAt: '2026-09-12T09:00:00.000+08:00' }),
+      makeTask('already', { hasBeenContinued: true, continuedToTaskId: 't-1', continuedToDate: '2026-09-13' }),
+      makeTask('flag-only', { hasBeenContinued: true }),
+      makeTask('carried', { continuedFromTaskId: 'old-1', continuedFromDate: '2026-09-11' })
+    ])
+  ]));
+  const rows = view.days[0].tasks;
+  assert.equal(rows[0].statusLabel, null);
+  assert.equal(rows[1].statusLabel, null);
+  assert.equal(rows[2].statusLabel, '已延续到 9月13日 周日');
+  assert.equal(rows[3].statusLabel, '已延续过');
+  assert.equal(rows[4].statusLabel, '延续自 9月11日 周五');
+  assert.equal(rows[4].isContinuedFrom, true);
+  assert.equal(rows[4].continuedFromDate, '2026-09-11');
+  assert.equal(rows[4].canContinue, true);
+});
+
+test('deriveHistoryView 不修改传入的快照', () => {
+  const snapshot = makeHistorySnapshot([
+    makeDay('2026-09-12', [makeTask('b'), makeTask('a')]),
+    makeDay('2026-09-11', [makeTask('c')])
+  ]);
+  const before = JSON.stringify(snapshot);
+  const view = deriveHistoryView(snapshot);
+  view.days[0].tasks[0].text = '被改写了';
+  view.days.reverse();
+  assert.equal(JSON.stringify(snapshot), before);
+});
+
+test('deriveHistoryView 拒绝结构不合法的快照', () => {
+  assert.throws(() => deriveHistoryView(null), TypeError);
+  assert.throws(() => deriveHistoryView({}), TypeError);
+});
+
+/* ---------- Settings ---------- */
+
+test('deriveSettingsView 投影透明度与窗口层级', () => {
+  const view = deriveSettingsView(makeSnapshot([]));
+  assert.equal(view.backgroundOpacity, 0.82);
+  assert.equal(view.opacityPercent, 82);
+  assert.equal(view.opacityLabel, '82%');
+  assert.equal(view.opacityCssValue, '0.82');
+  assert.equal(view.opacityMin, 55);
+  assert.equal(view.opacityMax, 100);
+  assert.equal(view.windowMode, 'topmost');
+  assert.deepEqual(view.windowModes, [
+    { value: 'normal', label: '普通', selected: false },
+    { value: 'topmost', label: '置顶', selected: true }
+  ]);
+  assert.equal(view.closeToTray, true);
+  assert.equal(view.launchAtLogin, false);
+});
+
+test('deriveSettingsView 在窗口模式非法时回落到普通模式', () => {
+  const view = deriveSettingsView(makeHistorySnapshot([], { windowMode: 'desktop' }));
+  assert.equal(view.windowMode, 'normal');
+  assert.deepEqual(view.windowModes.map((mode) => mode.selected), [true, false]);
+});
+
+test('deriveSettingsView 夹紧越界的透明度，并在缺值时使用默认值', () => {
+  assert.equal(deriveSettingsView(makeHistorySnapshot([], { backgroundOpacity: 0.1 })).opacityPercent, 55);
+  assert.equal(deriveSettingsView(makeHistorySnapshot([], { backgroundOpacity: 5 })).opacityPercent, 100);
+  assert.equal(deriveSettingsView(makeHistorySnapshot([], { backgroundOpacity: 'x' })).opacityPercent, 82);
+});
+
+test('deriveSettingsView 把开关类设置强制成布尔值', () => {
+  const view = deriveSettingsView(makeHistorySnapshot([], { closeToTray: 0, launchAtLogin: 'yes' }));
+  assert.equal(view.closeToTray, false);
+  assert.equal(view.launchAtLogin, true);
+});
+
+/* ---------- 拖拽落点 ---------- */
+
+test('resolveDropIndex 用中点判断落点', () => {
+  assert.equal(resolveDropIndex([10, 20, 30], 5), 0);
+  assert.equal(resolveDropIndex([10, 20, 30], 15), 1);
+  assert.equal(resolveDropIndex([10, 20, 30], 25), 2);
+  assert.equal(resolveDropIndex([10, 20, 30], 100), 2);
+});
+
+test('resolveDropIndex 恰好等于中点时落到下一个位置', () => {
+  assert.equal(resolveDropIndex([10, 20, 30], 10), 1);
+  assert.equal(resolveDropIndex([10, 20, 30], 30), 2);
+});
+
+test('resolveDropIndex 对空列表返回 -1', () => {
+  assert.equal(resolveDropIndex([], 5), -1);
 });

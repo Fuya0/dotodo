@@ -73,24 +73,53 @@
         </section>
       </section>
 
+      <section class="content" id="historyPage" aria-label="历史记录" hidden>
+        <div class="hero">
+          <p class="eyebrow">历史</p>
+          <div class="heading-row">
+            <h1>过去的清单</h1>
+            <span id="historyCount" class="progress-label">0 天</span>
+          </div>
+        </div>
+
+        <div id="historyList" class="history-list" aria-live="polite"></div>
+
+        <section id="historyEmpty" class="empty-state" hidden>
+          <div class="empty-check" aria-hidden="true"><span></span></div>
+          <h2 id="historyEmptyTitle">还没有历史记录</h2>
+          <p id="historyEmptyCopy">每过一天，当天的清单会完整留在这里。</p>
+        </section>
+      </section>
+
       <nav class="tabs" aria-label="视图切换">
         <button class="tab is-active" type="button" data-page="today" aria-current="page">今天</button>
-        <button class="tab" type="button" data-page="history" disabled title="历史视图将在第 5 课接入">历史</button>
+        <button class="tab" type="button" data-page="history">历史</button>
         <span class="tab-hint"><kbd>Ctrl</kbd><kbd>N</kbd> 聚焦输入框</span>
       </nav>
 
       <div id="undoBar" class="undo-bar" role="status" hidden>
+        <span id="undoProgress" class="undo-progress" aria-hidden="true"></span>
         <span id="undoText">已删除一项任务</span>
         <button id="undoButton" type="button">撤销</button>
       </div>
 
       <section id="settingsPanel" class="settings-panel" aria-label="设置" hidden>
+        <div class="settings-head">
+          <h2>设置</h2>
+          <button id="settingsCloseButton" class="icon-button" type="button" aria-label="关闭设置" title="关闭设置">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+          </button>
+        </div>
         <div class="setting-row">
           <label for="opacitySlider">背景透明度</label>
           <div class="range-wrap">
             <input id="opacitySlider" type="range" min="55" max="100" step="1" value="82" />
             <output id="opacityValue" for="opacitySlider">82%</output>
           </div>
+        </div>
+        <div class="setting-row">
+          <span id="windowModeLabel">窗口层级</span>
+          <div id="windowModeGroup" class="segmented" role="radiogroup" aria-labelledby="windowModeLabel"></div>
         </div>
       </section>
     </main>

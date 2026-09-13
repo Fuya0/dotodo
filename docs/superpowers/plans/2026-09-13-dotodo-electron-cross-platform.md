@@ -323,39 +323,43 @@ git commit -m "feat: create dark glass Today interface"
 - Consumes: task/history/settings commands from Preload.
 - Produces: date-grouped History, six-second undo UI, pointer drag reordering and a right-anchored settings popover.
 
-- [ ] **Step 1: Add failing history/settings projection tests**
+- [x] **Step 1: Add failing history/settings projection tests**
 
 Assert descending dates, continuation button visibility, continuation label, opacity percentage and selected window mode.
 
-- [ ] **Step 2: Implement History and Settings projection functions**
+- [x] **Step 2: Implement History and Settings projection functions**
 
 The continuation action is hidden when completed, `hasBeenContinued`, or currently linked.
 
-- [ ] **Step 3: Render History with read-only rows**
+- [x] **Step 3: Render History with read-only rows**
 
 Only delete and continue actions are interactive; historical text, checkbox state and order cannot be edited.
 
-- [ ] **Step 4: Implement the six-second undo bar**
+- [x] **Step 4: Implement the six-second undo bar**
 
 Use one renderer timer for visibility while the main-process engine owns token validity.
 
-- [ ] **Step 5: Implement pointer-based drag reorder**
+- [x] **Step 5: Implement pointer-based drag reorder**
 
 Start only from a dedicated handle, clear the candidate on pointer up/cancel/leave, and send task ID plus target index after drop.
 
-- [ ] **Step 6: Implement the right-top settings popover**
+- [x] **Step 6: Implement the right-top settings popover**
+
+This stage ships background opacity and the normal/topmost layer control. Close-to-tray, launch at
+login and the `desktop` layer arrive with the native shell in Task 6, so the popover never shows a
+switch that cannot work yet.
 
 The close control sits in the popover's top-right grid cell. Background opacity displays a percentage and updates only `--surface-opacity`.
 
-- [ ] **Step 7: Run renderer and full Node tests**
+- [x] **Step 7: Run renderer and full Node tests**
 
 Run: `npm test`
 
-- [ ] **Step 8: Write lesson 05 and interaction exercises**
+- [x] **Step 8: Write lesson 05 and interaction exercises**
 
 Teach event propagation, pointer events, timers, derived UI state, optimistic versus authoritative updates, and implementing a small drag state machine by hand.
 
-- [ ] **Step 9: Commit Task 5**
+- [x] **Step 9: Commit Task 5**
 
 ```bash
 git add src/renderer test/renderer docs/learning/electron/05-state-driven-interactions.md exercises/electron/05-interactions
