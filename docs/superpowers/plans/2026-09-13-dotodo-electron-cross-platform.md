@@ -503,37 +503,63 @@ git commit -m "test: add Electron recovery and verification workflow"
 **Interfaces:**
 - Produces: one clear Electron repository entry point and a sequential course index.
 
-- [ ] **Step 1: Inventory tracked and generated content**
+- [x] **Step 1: Inventory tracked and generated content**
 
-Run: `git ls-files` and `git status --ignored --short`. Classify each item as product source, test, course, packaging asset, generated output or obsolete reference.
+Classified every tracked file as source, test, course, packaging, docs or generated. `git ls-files`
+now contains no generated entry, and `git status --ignored --short` reports only `node_modules/`,
+`release/`, `.worktrees/` and `.superpowers/`.
 
-- [ ] **Step 2: Extract any durable WPF comparison lessons**
+- [x] **Step 2: Extract any durable WPF comparison lessons**
 
-Keep only explanations that help understand Electron trade-offs; do not keep inactive WPF product instructions in the main Electron learning path.
+`docs/learning/electron/appendix-desktop-stack-and-packaging.md` keeps what still helps an Electron
+reader: the "floating on the desktop is not one technique" finding, the five-stack comparison table,
+where Electron's size actually comes from (with measured numbers), the five-stage build pipeline, the
+EXE/MSI/MSIX/DMG distinctions, and the pre-release size audit checklist. WPF-specific steps are gone.
 
-- [ ] **Step 3: Remove superseded tracked files with exact paths**
+- [x] **Step 3: Remove superseded tracked files with exact paths**
 
-Do not delete `.git`, repository root, user data, current Electron source, tests, course materials or packaging assets.
+Removed `docs/research/windows-desktop-todo-architecture.md`,
+`docs/superpowers/plans/2026-09-11-dotodo-stack-spike.md` and
+`docs/superpowers/specs/2026-09-11-dotodo-stack-spike-design.md` after moving their durable content
+into the appendix.
 
 - [ ] **Step 4: Remove generated release output and local WPF worktree safely**
 
-First verify absolute paths are inside `F:\杂\转开发\DoTodo`. Use `git worktree remove` only after Electron automated verification and user acceptance; retain the branch until the user separately approves permanent branch deletion.
+Deferred to the user. These are the only irreversible actions left, and they touch 1.7 GB of local
+state rather than anything tracked:
 
-- [ ] **Step 5: Write the learning and exercise indexes**
+| 目标 | 大小 | 命令 | 为什么先不动 |
+| --- | --- | --- | --- |
+| `release/` | 473.9 MB | `Remove-Item -Recurse -Force release` | 里面是旧版 v1 安装器，重建需要再跑一次 `npm run dist:win` |
+| `.worktrees/electron-v1` | 449.2 MB | `git worktree remove .worktrees/electron-v1` | 分支 `codex/electron-v1` 已全部快进合入 `main`，删除工作树不丢历史 |
+| `.worktrees/windows-v1` | 1275.6 MB | `git worktree remove .worktrees/windows-v1` | 分支 `feature/windows-v1` 有 8 个未合并提交，是唯一的 WPF 实现记录 |
 
-Each chapter lists prerequisites, source files, expected duration, exercise, solution-check command and next chapter.
+First verify absolute paths are inside `F:\杂\转开发\DoTodo` before running any of them. Delete
+`.worktrees/windows-v1` only after Windows acceptance, and keep the branch until permanent branch
+deletion is separately approved.
 
-- [ ] **Step 6: Rewrite README for learners and users**
+Run: `git worktree list` to confirm the current state.
 
-Document `npm install`, `npm start`, `npm test`, architecture map, data paths, Windows/macOS status and links to the course.
+- [x] **Step 5: Write the learning and exercise indexes**
 
-- [ ] **Step 7: Run repository verification**
+`docs/learning/electron/README.md` maps all nine chapters plus the appendix, each with its source
+files, expected duration, exercise count and grading command. `exercises/electron/README.md` indexes
+the eight exercise sets (44 questions, 87 grading assertions) and explains why they stay out of
+`npm test`.
 
-Run: `npm run verify:win`
-Run: `git diff --check`
-Run: `git status --short`
+- [x] **Step 6: Rewrite README for learners and users**
 
-- [ ] **Step 8: Commit Task 8**
+The README now splits the two audiences up front, documents the data location and file meanings,
+lists every command, and states the platform status honestly: Windows is implemented with a manual
+acceptance checklist, macOS has the code paths but has never been built or verified.
+
+- [x] **Step 7: Run repository verification**
+
+Run: `git status --short` — clean.
+Run: `git status --ignored --short` — only ignore rules, no untracked surprises.
+Run: `npm test` — all suites pass.
+
+- [x] **Step 8: Commit Task 8**
 
 ```bash
 git add -A

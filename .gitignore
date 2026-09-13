@@ -1,9 +1,27 @@
+# 依赖
 node_modules/
+
+# 构建产物
 release/
 dist/
+
+# 本地运行时可能落到仓库里的状态文件（正常应写入用户数据目录）
+state.json
+state.backup.json
+state.tmp.json
+recovery-*.json
+*.tmp
+
+# 日志
 *.log
-.DS_Store
-.idea/
-.vscode/
-.superpowers/
+npm-debug.log*
+
+# 本地工作树与开发工具状态
 .worktrees/
+.superpowers/
+
+# 编辑器与操作系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
