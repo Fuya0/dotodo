@@ -19,9 +19,8 @@ recovery-*.json
 *.log
 npm-debug.log*
 
-# 本地工作树与开发工具状态
+# 本地工作树
 .worktrees/
-.superpowers/
 
 # 编辑器与操作系统
 .vscode/

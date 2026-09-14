@@ -123,7 +123,6 @@ dist/
 .idea/
 .vscode/
 
-.superpowers/
 .worktrees/
 ```
 
@@ -131,7 +130,7 @@ dist/
 
 - **依赖与产物**：`node_modules/`、`release/`、`dist/`。它们可以随时重建，进版本库只会让仓库膨胀几十倍，还会在每次构建时产生巨大的 diff。
 - **编辑器与系统**：`.idea/`、`.vscode/`、`.DS_Store`。每个人用的工具不同。
-- **本地工作树与工具状态**：`.worktrees/`、`.superpowers/`。这是 Git worktree 和开发工具在本地放东西的地方。
+- **本地工作树**：`.worktrees/`。这是 Git worktree 在本地放检出目录的地方。
 
 一个容易忽略的点：**`.gitignore` 只影响未被跟踪的文件**。如果某个文件已经被 `git add` 过，之后再写进 `.gitignore` 是没有用的，必须显式 `git rm --cached`。早期不小心提交了 `release/` 的仓库，往往就是这样越滚越大。
 
@@ -206,7 +205,7 @@ npm run verify:win
 整理之后应该确认：
 
 1. `git status --short` 干净，没有漏提交的新文件；
-2. `git status --ignored --short` 里只有 `node_modules/`、`release/`、`.worktrees/`、`.superpowers/`；
+2. `git status --ignored --short` 里只有 `node_modules/`、`release/`、`.worktrees/`；
 3. `git ls-files` 里没有任何 generated 类别的文件；
 4. 从 `docs/learning/electron/README.md` 出发，能点到全部 9 课和每组习题；
 5. 随便挑一个习题目录，三件套齐全，`node starter.test.js` 能跑（全红是正常的）。

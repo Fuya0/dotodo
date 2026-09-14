@@ -286,6 +286,6 @@ macOS 的步骤在 `docs/release/macos-release-checklist.md`，必须在那台�
   ```
 
 - 挑一个第 4 课和第 5 课里没实现的功能自己加（比如任务排序持久化到独立字段、按标签分组），走一遍同样的四步循环：先写测试 → 再写实现 → 再写文档 → 再提交；
-- 读一遍 `docs/superpowers/plans/2026-09-13-dotodo-electron-cross-platform.md`，对照它的九个任务看实际做了什么、哪些地方和计划不一样、为什么。
+- 读一遍 `docs/design-notes.md`，它记的是"为什么这么选"——比如背景为什么改成固定的中性灰、平台差异为什么从界面移出去、Electron 42 之后为什么必须自己补 postinstall。
 
 **最后一件事**：把 `CONTEXT.md` 里那几个词（Today、Day record、Task、Continuation、History）记牢。整个项目的代码之所以能写得清楚，是因为这几个词先被定义清楚了——这是最值得带走的一条经验。

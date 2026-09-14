@@ -86,7 +86,7 @@ flattenTargets([{ target: 'dmg', arch: ['x64', 'arm64'] }])
 
 | 路径特征 | 结果 |
 | --- | --- |
-| `node_modules/`、`release/`、`dist/`、`.worktrees/`、`.superpowers/` 开头 | `'generated'` |
+| `node_modules/`、`release/`、`dist/`、`.worktrees/` 开头 | `'generated'` |
 | `exercises/` 开头 | `'course'` |
 | `docs/learning/` 开头 | `'course'` |
 | `src/` 开头 | `'source'` |

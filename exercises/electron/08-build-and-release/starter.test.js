@@ -117,7 +117,7 @@ test('classifyTrackedFile 按顶层目录归类', () => {
 
 test('classifyTrackedFile 优先识别课程与产物，并兼容反斜杠路径', () => {
   assert.equal(classifyTrackedFile('docs/learning/electron/01-process-model-and-pure-domain.md'), 'course');
-  assert.equal(classifyTrackedFile('docs/superpowers/specs/design.md'), 'docs');
+  assert.equal(classifyTrackedFile('docs/release/windows-release-checklist.md'), 'docs');
   assert.equal(classifyTrackedFile('release/win-unpacked/DoTodo.exe'), 'generated');
   assert.equal(classifyTrackedFile('node_modules/electron/index.js'), 'generated');
   assert.equal(classifyTrackedFile('src\\renderer\\app.js'), 'source');
