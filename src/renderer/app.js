@@ -205,8 +205,8 @@ function createHistoryDay(day) {
   count.textContent = day.progressLabel;
   head.append(title, count);
 
+  // 这个 div 只是给 replaceChildren 一个容器，没有对应样式，所以不挂类名。
   const list = document.createElement('div');
-  list.className = 'history-tasks';
   list.replaceChildren(...day.tasks.map((row) => createHistoryRow(row, day.date)));
 
   section.append(head, list);

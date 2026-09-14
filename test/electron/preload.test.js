@@ -48,7 +48,6 @@ test('preload exposes a frozen purpose-specific surface', () => {
     'minimizeWindow',
     'openDataFolder',
     'reorderTask',
-    'setBackgroundOpacity',
     'setCloseToTray',
     'setLaunchAtLogin',
     'setWindowMode',
@@ -73,7 +72,6 @@ test('preload maps arguments onto fixed IPC channels', async () => {
   await api.deleteHistoryTask('2026-09-12', 'id-2');
   await api.continueTask('2026-09-12', 'id-2');
   await api.undo('undo-1');
-  await api.setBackgroundOpacity(0.8);
   await api.setWindowMode('topmost');
   await api.setCloseToTray(true);
   await api.setLaunchAtLogin(false);
@@ -94,7 +92,6 @@ test('preload maps arguments onto fixed IPC channels', async () => {
     ['history:delete-task', '2026-09-12', 'id-2'],
     ['history:continue-task', '2026-09-12', 'id-2'],
     ['undo:apply', 'undo-1'],
-    ['settings:set-background-opacity', 0.8],
     ['settings:set-window-mode', 'topmost'],
     ['settings:set-close-to-tray', true],
     ['settings:set-launch-at-login', false],
@@ -104,4 +101,30 @@ test('preload maps arguments onto fixed IPC channels', async () => {
     ['window:minimize'],
     ['window:close']
   ]);
+});
+
+test('preload 用到的频道与主进程注册的频道完全一致', async () => {
+  // 这是最容易被改坏、又最难发现的一处：改了 ipc.js 里的频道名却漏改 preload.js，
+  // 所有单元测试仍然全绿，直到真的点那个按钮才发现"什么都没发生"。
+  // 两边各自的清单都是硬编码的（不能自己对着自己校验），这条测试把它们对起来。
+  const { CHANNELS } = require('../../src/electron/ipc');
+  const { api, calls } = executePreload();
+
+  for (const name of Object.keys(api)) {
+    await api[name]('probe-a', 'probe-b');
+  }
+
+  const usedByPreload = [...new Set(calls.map(([channel]) => channel))].sort();
+  const registered = [...new Set(Object.values(CHANNELS))].sort();
+
+  assert.deepEqual(
+    usedByPreload.filter((channel) => !registered.includes(channel)),
+    [],
+    'preload 调用了主进程没有注册的频道'
+  );
+  assert.deepEqual(
+    registered.filter((channel) => !usedByPreload.includes(channel)),
+    [],
+    '主进程注册了 preload 永远不会调用的频道'
+  );
 });

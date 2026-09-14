@@ -13,7 +13,6 @@ const CHANNELS = Object.freeze({
   deleteHistoryTask: 'history:delete-task',
   continueTask: 'history:continue-task',
   undo: 'undo:apply',
-  setBackgroundOpacity: 'settings:set-background-opacity',
   setWindowMode: 'settings:set-window-mode',
   setCloseToTray: 'settings:set-close-to-tray',
   setLaunchAtLogin: 'settings:set-launch-at-login',
@@ -121,13 +120,6 @@ function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareSt
     if (typeof shell.syncSettings === 'function') shell.syncSettings(result.snapshot.settings);
     return result;
   }
-
-  handleState(CHANNELS.setBackgroundOpacity, (_event, value) => {
-    if (!Number.isFinite(value) || value < 0.55 || value > 1) {
-      return invalidInput('背景透明度必须在 0.55 到 1 之间。');
-    }
-    return runCommand(() => engine.updateSettings({ backgroundOpacity: value }));
-  });
 
   handleState(CHANNELS.setWindowMode, async (_event, value) => {
     if (!WINDOW_MODES.includes(value)) return invalidInput('窗口模式无效。');

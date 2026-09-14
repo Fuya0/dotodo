@@ -373,7 +373,11 @@ if (printPaths) {
 
 app.on('activate', () => {
   if (engine && BrowserWindow.getAllWindows().length === 0) {
-    createAppWindow().load().catch((error) => console.error('[DoTodo activate]', error));
+    createAppWindow();
+    // macOS：关掉窗口应用不退出，再从 Dock 唤起会走到这里。新窗口必须重新绑定
+    // 「关闭时隐藏到托盘」，否则那个监听还挂在已经被销毁的旧窗口上。
+    shellController?.bindWindow();
+    windowController.load().catch((error) => console.error('[DoTodo activate]', error));
   }
 });
 

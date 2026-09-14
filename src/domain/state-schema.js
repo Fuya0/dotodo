@@ -1,4 +1,6 @@
 const DEFAULT_SETTINGS = Object.freeze({
+  // 遗留字段：背景透明度现在是固定的视觉常量（见 src/renderer/styles.css），
+  // 界面和 IPC 都不再暴露它。保留是为了让老存档照常通过校验，不需要升级 schemaVersion。
   backgroundOpacity: 0.82,
   windowMode: 'topmost',
   closeToTray: true,
@@ -168,8 +170,6 @@ function invalid(error) {
 }
 
 module.exports = {
-  DEFAULT_SETTINGS,
-  DEFAULT_WINDOW_BOUNDS,
   cloneState,
   createState,
   localDateOf,

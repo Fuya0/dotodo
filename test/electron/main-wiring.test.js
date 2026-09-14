@@ -1,0 +1,58 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+/**
+ * 组合根的接线约束。
+ *
+ * `src/main.js` 是唯一没法用 Node 单测覆盖的文件：它一被 require 就要求 Electron。
+ * 但里面有几条**顺序和成对关系**是硬约束，写错了只有真机跑起来才发现，
+ * 而且往往只在某个平台上才发作。这里用文本断言把它们钉住。
+ *
+ * 这类断言不如行为测试可靠（改个写法就可能失效），所以只保留真正踩过的坑，
+ * 不为"写法好看"加规则。
+ */
+
+const main = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'main.js'), 'utf8');
+
+test('macOS 的 activate 路径会重新绑定壳层窗口', () => {
+  // 关掉窗口再从 Dock 唤起会创建新窗口。少了这一次 bindWindow，
+  // 「关闭时隐藏到托盘」在 macOS 上就时灵时不灵。
+  const activate = main.match(/app\.on\('activate',[\s\S]*?\n\}\);/);
+  assert.ok(activate, '找不到 app.on(\'activate\') 处理器。');
+  assert.match(activate[0], /shellController\?\.bindWindow\(\)/);
+  assert.ok(
+    activate[0].indexOf('createAppWindow()') < activate[0].indexOf('bindWindow()'),
+    '必须先建出新窗口，再往它上面绑定'
+  );
+});
+
+test('退出时三个控制器都被处置', () => {
+  const willQuit = main.match(/app\.on\('will-quit',[\s\S]*?\n\}\);/);
+  assert.ok(willQuit, '找不到 app.on(\'will-quit\') 处理器。');
+  for (const dispose of ['ipcRegistration', 'shellController', 'windowController']) {
+    assert.match(willQuit[0], new RegExp(`${dispose}\\?\\.dispose\\(\\)`), `退出时没有处置 ${dispose}`);
+  }
+});
+
+test('壳层初始化发生在窗口创建之后', () => {
+  // bindWindow 需要窗口已经存在；initialize 还会顺便在托盘创建失败时记警告。
+  const initialize = main.indexOf('createAppWindow();');
+  const shellBoot = main.indexOf('shellController.initialize()');
+  assert.ok(initialize > 0 && shellBoot > 0);
+  assert.ok(initialize < shellBoot, '窗口要在壳层初始化之前建好');
+});
+
+test('IPC 注册晚于状态准备与窗口创建', () => {
+  // 早于窗口创建不会立刻出错，但早于引擎创建会让所有 handler 拿到 null。
+  const engineCreation = main.indexOf('createDailyTodoEngine(');
+  const ipcRegistration = main.indexOf('ipcRegistration = registerIpc(');
+  assert.ok(engineCreation > 0 && ipcRegistration > 0);
+  assert.ok(engineCreation < ipcRegistration, '引擎必须先于 IPC 注册');
+});
+
+test('冒烟模式会汇报壳层启动结果', () => {
+  // tools/ui-check.js 靠这一行断言托盘在真实 Electron 里建起来了。
+  assert.match(main, /DOTODO_SHELL_BOOT/);
+});

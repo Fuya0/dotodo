@@ -31,6 +31,60 @@ function stripComments(source) {
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
+const isClassToken = (token) => /^[a-z][a-z0-9-]*$/.test(token);
+
+/**
+ * 界面代码里**真正当类名用**的名字：HTML 的 class 属性、JS 的 className 赋值、
+ * classList 调用。三种写法都要认——只认两种的话，`className = 'a b'` 这种
+ * 多类名字符串就会漏掉，反而把活着的类报成死的。
+ */
+function classesUsedInCode() {
+  const names = new Set();
+  for (const match of html.matchAll(/class="([^"]+)"/g)) {
+    match[1].split(/\s+/).filter(isClassToken).forEach((name) => names.add(name));
+  }
+  for (const match of app.matchAll(/className\s*=\s*(`[^`]*`|'[^']*')/g)) {
+    match[1]
+      .replace(/['`$]/g, ' ')
+      .replace(/\{[^}]*\}/g, ' ')
+      .split(/[\s?:]+/)
+      .filter(isClassToken)
+      .forEach((name) => names.add(name));
+  }
+  for (const match of app.matchAll(/classList\.(?:add|remove|toggle)\(\s*'([^']+)'/g)) {
+    if (isClassToken(match[1])) names.add(match[1]);
+  }
+  return names;
+}
+
+/**
+ * 所有单引号字符串里的 token。比上面宽松，只用于「CSS 里有没有人用」那一侧的判断：
+ * 模板字符串里的 `' completed'` 这类写法走不了精确提取，宁可宽松也不能假失败。
+ */
+function looseStringTokens(source) {
+  const names = new Set();
+  for (const match of source.matchAll(/'([^']*)'/g)) {
+    match[1].split(/[\s${}?:.,;()]+/).filter(isClassToken).forEach((name) => names.add(name));
+  }
+  return names;
+}
+
+const definedClasses = new Set(
+  [...stylesCode.matchAll(/\.([a-z][a-z0-9-]*)/g)].map((match) => match[1])
+);
+
+test('界面里当类名用的每个名字都在 styles.css 里有规则', () => {
+  // 写了 class 却没有对应样式，通常意味着改名时漏了一边，或者这个钩子本来就是多余的。
+  const missing = [...classesUsedInCode()].filter((name) => !definedClasses.has(name)).sort();
+  assert.deepEqual(missing, [], `这些类名在 styles.css 里没有定义：${missing.map((n) => `.${n}`).join('、')}`);
+});
+
+test('styles.css 里没有已经没人引用的类', () => {
+  const referenced = new Set([...classesUsedInCode(), ...looseStringTokens(app)]);
+  const unused = [...definedClasses].filter((name) => !referenced.has(name)).sort();
+  assert.deepEqual(unused, [], `这些 CSS 类没有任何代码引用：${unused.map((n) => `.${n}`).join('、')}`);
+});
+
 test('index.html 里声明的每个 id 都唯一', () => {
   const ids = matchAll(html, /\sid="([^"]+)"/g);
   assert.ok(ids.length > 0, '页面应该至少声明一个 id。');

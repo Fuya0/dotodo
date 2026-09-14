@@ -15,7 +15,6 @@ const EXPECTED_CHANNELS = [
   'data:open-folder',
   'history:continue-task',
   'history:delete-task',
-  'settings:set-background-opacity',
   'settings:set-close-to-tray',
   'settings:set-launch-at-login',
   'settings:set-window-mode',
@@ -180,20 +179,16 @@ test('settings reject coerced values and coordinate native effects', async () =>
   const harness = createHarness();
   register(harness);
 
-  assert.equal((await invoke(harness, 'settings:set-background-opacity', '0.8')).ok, false);
-  assert.equal((await invoke(harness, 'settings:set-background-opacity', 0.2)).ok, false);
   assert.equal((await invoke(harness, 'settings:set-window-mode', 'magic')).ok, false);
   assert.equal((await invoke(harness, 'settings:set-close-to-tray', 1)).ok, false);
   assert.equal((await invoke(harness, 'settings:set-launch-at-login', 'yes')).ok, false);
   assert.deepEqual(harness.calls, []);
 
-  await invoke(harness, 'settings:set-background-opacity', 0.8);
   await invoke(harness, 'settings:set-window-mode', 'topmost');
   await invoke(harness, 'settings:set-close-to-tray', false);
   await invoke(harness, 'settings:set-launch-at-login', true);
 
   assert.deepEqual(harness.calls.filter(([name]) => name === 'updateSettings'), [
-    ['updateSettings', { backgroundOpacity: 0.8 }],
     ['updateSettings', { windowMode: 'topmost' }],
     ['updateSettings', { closeToTray: false }],
     ['updateSettings', { launchAtLogin: true }]

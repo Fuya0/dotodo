@@ -62,6 +62,7 @@ function createShellController(options) {
 
   let tray = null;
   let closeHandler = null;
+  let closeBoundWindow = null;
   let beforeQuitHandler = null;
   let isQuitting = false;
   let disposed = false;
@@ -84,7 +85,7 @@ function createShellController(options) {
       }
     }
 
-    attachCloseHandler();
+    bindWindow();
     attachBeforeQuitHandler();
 
     // 快捷键冲突不写进 warnings：那会让一条非致命的降级占掉界面顶部一整条提示，
@@ -204,9 +205,23 @@ function createShellController(options) {
     }
   }
 
-  function attachCloseHandler() {
+  /**
+   * 把「关闭时隐藏到托盘」挂到当前窗口上。
+   *
+   * **幂等**：先解开上一次的绑定再挂新的。macOS 上用户关掉窗口后应用并不退出，
+   * 再从 Dock 唤起会创建一个新窗口——那边必须重新绑定一次，否则新窗口的关闭按钮
+   * 会真的把窗口销毁，"关闭到托盘"看起来时灵时不灵。
+   */
+  function bindWindow() {
+    if (closeBoundWindow && closeHandler && typeof closeBoundWindow.removeListener === 'function') {
+      closeBoundWindow.removeListener('close', closeHandler);
+    }
+    closeBoundWindow = null;
+    closeHandler = null;
+
     const window = getWindow();
-    if (!window || typeof window.on !== 'function') return;
+    if (!window || typeof window.on !== 'function') return false;
+
     closeHandler = (event) => {
       if (isQuitting) return;
       // 托盘是「藏起来之后还能找回来」的唯一入口。连托盘都没建起来时把它藏掉，
@@ -217,6 +232,8 @@ function createShellController(options) {
       hideWindow();
     };
     window.on('close', closeHandler);
+    closeBoundWindow = window;
+    return true;
   }
 
   function attachBeforeQuitHandler() {
@@ -264,11 +281,12 @@ function createShellController(options) {
       onError(error);
     }
 
-    const window = getWindow();
-    if (window && typeof window.removeListener === 'function' && closeHandler) {
-      window.removeListener('close', closeHandler);
+    // 从**绑定时那个**窗口上解绑，而不是当前窗口——重新绑定之后两者可能已经不是同一个。
+    if (closeBoundWindow && typeof closeBoundWindow.removeListener === 'function' && closeHandler) {
+      closeBoundWindow.removeListener('close', closeHandler);
     }
     closeHandler = null;
+    closeBoundWindow = null;
 
     if (typeof app.removeListener === 'function' && beforeQuitHandler) {
       app.removeListener('before-quit', beforeQuitHandler);
@@ -288,6 +306,7 @@ function createShellController(options) {
 
   return Object.freeze({
     initialize,
+    bindWindow,
     refreshMenu,
     setWindowMode,
     setLaunchAtLogin,

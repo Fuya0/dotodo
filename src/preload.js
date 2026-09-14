@@ -11,7 +11,6 @@ contextBridge.exposeInMainWorld('dotodo', Object.freeze({
   deleteHistoryTask: (date, id) => ipcRenderer.invoke('history:delete-task', date, id),
   continueTask: (date, id) => ipcRenderer.invoke('history:continue-task', date, id),
   undo: (token) => ipcRenderer.invoke('undo:apply', token),
-  setBackgroundOpacity: (value) => ipcRenderer.invoke('settings:set-background-opacity', value),
   setWindowMode: (value) => ipcRenderer.invoke('settings:set-window-mode', value),
   setCloseToTray: (value) => ipcRenderer.invoke('settings:set-close-to-tray', value),
   setLaunchAtLogin: (value) => ipcRenderer.invoke('settings:set-launch-at-login', value),

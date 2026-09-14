@@ -59,6 +59,23 @@ rollover branch. `npm run ui-check` is now 8 scenarios and 187 assertions, inclu
 proof that a corrupt file was preserved rather than overwritten. This is also where the title bar
 regression was caught: the grid put the warning band in row 1, pushing the window controls down.
 
+**R9 — A pre-acceptance review pass.** Reading the codebase back found four things worth fixing:
+
+- **A real macOS defect.** `app.on('activate')` rebuilds the window after the user closes it, but the
+  shell's close-to-tray listener stayed on the destroyed window, so close-to-tray worked only until
+  the first reactivation. The shell controller now exposes an idempotent `bindWindow()`, and the
+  composition root calls it on the activate path. Covered by tests that swap the window fake.
+- **Documentation that was ahead of the code.** R1 claimed `setBackgroundOpacity` had been removed
+  from the preload API; it was still exposed in `preload.js` and still registered in `ipc.js`. The
+  channel and handler are now actually gone. The schema field stays, because dropping it would force
+  a migration for old saves, and it is now commented as legacy.
+- **A missing cross-check.** Nothing verified that the channels `preload.js` calls match the channels
+  `ipc.js` registers — renaming one side leaves every test green until the button is clicked. There
+  is a test for it now.
+- **Dead surface.** Two markup hooks (`.brand-name`, `.history-tasks`) had classes with no CSS rule,
+  and two schema constants were exported but never imported. Both are gone, and a renderer test now
+  fails on either kind of drift.
+
 
 ## Global Constraints
 

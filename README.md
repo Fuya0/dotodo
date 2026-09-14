@@ -156,7 +156,7 @@ build/                       只用于构建的资源（应用图标 SVG）
 
 ```powershell
 npm start            # 开发运行
-npm test             # 全部测试（169 条断言 / 14 个文件）
+npm test             # 全部测试（181 条断言 / 15 个文件）
 npm run smoke        # 真实 Electron 冒烟测试，使用隔离的临时数据目录
 npm run ui-check     # 在真实渲染进程里重放交互（8 个场景 / 187 条断言），每个场景留一张截图
 npm run icons        # 重新生成托盘图标

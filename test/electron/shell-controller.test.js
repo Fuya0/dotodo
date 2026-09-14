@@ -50,27 +50,42 @@ function createHarness(overrides = {}) {
     ...overrides.settings
   };
 
-  const windowListeners = new Map();
-  const window = {
-    visible: true,
-    setAlwaysOnTop: (...args) => calls.push(['setAlwaysOnTop', ...args]),
-    setSkipTaskbar: (...args) => calls.push(['setSkipTaskbar', ...args]),
-    show: () => {
-      window.visible = true;
-      calls.push(['show']);
-    },
-    hide: () => {
-      window.visible = false;
-      calls.push(['hide']);
-    },
-    focus: () => calls.push(['focus']),
-    isVisible: () => window.visible,
-    isDestroyed: () => false,
-    on: (event, handler) => windowListeners.set(event, handler),
-    removeListener: (event, handler) => {
-      if (windowListeners.get(event) === handler) windowListeners.delete(event);
-    }
-  };
+  /**
+   * 每个窗口替身自己持有监听表，并且把每次绑定/解绑都记进 calls。
+   * 「关了窗口再从 Dock 唤起」这条 macOS 路径会换一个新窗口，
+   * 只有能换窗口才测得出监听有没有跟过去。
+   */
+  function createWindowFake() {
+    const listeners = new Map();
+    const fake = {
+      listeners,
+      visible: true,
+      setAlwaysOnTop: (...args) => calls.push(['setAlwaysOnTop', ...args]),
+      setSkipTaskbar: (...args) => calls.push(['setSkipTaskbar', ...args]),
+      show: () => {
+        fake.visible = true;
+        calls.push(['show']);
+      },
+      hide: () => {
+        fake.visible = false;
+        calls.push(['hide']);
+      },
+      focus: () => calls.push(['focus']),
+      isVisible: () => fake.visible,
+      isDestroyed: () => false,
+      on: (event, handler) => {
+        listeners.set(event, handler);
+        calls.push(['window.on', event]);
+      },
+      removeListener: (event, handler) => {
+        calls.push(['window.off', event]);
+        if (listeners.get(event) === handler) listeners.delete(event);
+      }
+    };
+    return fake;
+  }
+
+  let window = createWindowFake();
 
   const appListeners = new Map();
   const app = {
@@ -133,8 +148,18 @@ function createHarness(overrides = {}) {
   return {
     calls,
     settings,
-    window,
-    windowListeners,
+    // `window` 和 `windowListeners` 都取当前窗口：换过窗口之后要看到的是新的那个。
+    get window() {
+      return window;
+    },
+    get windowListeners() {
+      return window.listeners;
+    },
+    /** 模拟「窗口被销毁、稍后重建」：getWindow() 从此返回一个全新的替身。 */
+    replaceWindow() {
+      window = createWindowFake();
+      return window;
+    },
     app,
     appListeners,
     globalShortcut,
@@ -415,6 +440,45 @@ test('托盘不可用时关闭窗口不会被拦截，否则窗口会再也找�
   assert.equal(event.prevented, 0);
 });
 
+test('窗口被重建之后，closeToTray 会重新绑定到新窗口', () => {
+  // macOS 上关掉窗口应用并不退出，再从 Dock 唤起会创建一个新窗口。
+  // 如果不重新绑定，那个 close 监听还挂在已被销毁的旧窗口上，
+  // 表现是「关闭到托盘时灵时不灵」。
+  const harness = createHarness();
+  harness.controller.initialize();
+  const oldWindow = harness.window;
+  assert.equal(oldWindow.listeners.has('close'), true);
+
+  const newWindow = harness.replaceWindow();
+  assert.equal(newWindow.listeners.has('close'), false, '新窗口一开始不该有任何监听');
+
+  harness.controller.bindWindow();
+
+  assert.equal(newWindow.listeners.has('close'), true, '新窗口应该被重新绑定');
+  assert.equal(oldWindow.listeners.has('close'), false, '旧窗口上的监听应该被解开');
+
+  const event = { prevented: 0, preventDefault() { this.prevented += 1; } };
+  newWindow.listeners.get('close')(event);
+  assert.equal(event.prevented, 1, '新窗口的关闭应该被「关闭到托盘」拦下');
+  assert.equal(newWindow.visible, false);
+});
+
+test('bindWindow 可以重复调用而不会叠加监听', () => {
+  const harness = createHarness();
+  harness.controller.initialize();
+  harness.controller.bindWindow();
+  harness.controller.bindWindow();
+
+  const bound = harness.calls.filter(([name]) => name === 'window.on').length;
+  const unbound = harness.calls.filter(([name]) => name === 'window.off').length;
+  assert.equal(bound - unbound, 1, '同一时刻只应该留着一个 close 监听');
+});
+
+test('window 还不存在时 bindWindow 返回 false 而不是抛异常', () => {
+  const harness = createHarness({ noWindow: true });
+  assert.equal(harness.controller.bindWindow(), false);
+});
+
 test('用户主动退出时不再被 closeToTray 拦住', () => {
   const harness = createHarness();
   harness.controller.initialize();
@@ -468,6 +532,19 @@ test('dispose 注销快捷键、销毁托盘并解绑窗口事件', () => {
   assert.equal(harness.registered.size, 0);
   assert.equal(harness.trays[0].destroyed, true);
   assert.equal(harness.windowListeners.has('close'), false);
+});
+
+test('dispose 从当初绑定的那个窗口上解绑', () => {
+  // 重新绑定之后，"当前窗口"可能已经不是被绑定的那个了，
+  // 所以解绑必须针对当初那个，而不是再问一次 getWindow()。
+  const harness = createHarness();
+  harness.controller.initialize();
+  const boundWindow = harness.window;
+
+  harness.replaceWindow();
+  harness.controller.dispose();
+
+  assert.equal(boundWindow.listeners.has('close'), false, '当初绑定的窗口应该被解绑');
 });
 
 test('dispose 可以重复调用而不会重复销毁托盘', () => {
