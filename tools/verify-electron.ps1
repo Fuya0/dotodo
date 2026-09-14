@@ -181,6 +181,23 @@ Invoke-Step '打包产物体积分类' {
   if ($installer) {
     Write-Host ''
     Write-Host ("安装器下载体积：{0}（{1}）" -f (Format-Bytes $installer.Length), $installer.Name)
+    # 这个脚本只跑 pack（重建 win-unpacked），不重建安装器。
+    # 所以磁盘上的安装器可能来自更早的源码 —— 直接报它的体积会误导人。
+    # 比较基准必须是**源码**，不能是 win-unpacked：本脚本刚刚重建过它，
+    # 拿它当基准的话安装器永远显示为"陈旧"。
+    $sourceFiles = @(
+      Get-ChildItem -File -Recurse (Join-Path $repoRoot 'src') -ErrorAction SilentlyContinue
+      Get-ChildItem -File -Recurse (Join-Path $repoRoot 'assets') -ErrorAction SilentlyContinue
+      Get-Item (Join-Path $repoRoot 'package.json')
+    )
+    $newestSource = $sourceFiles |
+      Sort-Object -Property LastWriteTime -Descending |
+      Select-Object -First 1
+    if ($newestSource -and ($installer.LastWriteTime -lt $newestSource.LastWriteTime)) {
+      Write-Host '⚠ 安装器比源码旧：它对应的不是当前代码。' -ForegroundColor Yellow
+      Write-Host "  安装器 $($installer.LastWriteTime)；较新的源码 $($newestSource.LastWriteTime)（$($newestSource.Name)）。" -ForegroundColor Yellow
+      Write-Host '  重新执行 npm run dist:win 再记录体积。' -ForegroundColor Yellow
+    }
     Write-Host '注意：安装后体积、打包目录体积和下载体积是三个不同的数字，不要混为一个。'
   } else {
     Write-Host ''
