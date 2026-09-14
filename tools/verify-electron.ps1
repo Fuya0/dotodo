@@ -50,6 +50,26 @@ function Format-Bytes([double]$Bytes) {
   return ('{0:N1} {1}' -f $value, $unit)
 }
 
+function Get-ProcessTreeId([int]$RootId) {
+  # Electron 是「主进程 + 若干子进程」（GPU、渲染、工具进程）。要量这个应用的
+  # 内存就得把整棵树加起来，而按进程名抓会把机器上别的实例也一起算进去。
+  $all = @(
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+      Select-Object ProcessId, ParentProcessId
+  )
+  $ids = @($RootId)
+  do {
+    $added = $false
+    foreach ($entry in $all) {
+      if ($ids -contains $entry.ParentProcessId -and $ids -notcontains $entry.ProcessId) {
+        $ids += [int]$entry.ProcessId
+        $added = $true
+      }
+    }
+  } while ($added)
+  return $ids
+}
+
 function Invoke-Step {
   param(
     [Parameter(Mandatory)][string]$Name,
@@ -212,38 +232,23 @@ if (-not $SkipMemory) {
       throw "找不到 $executable（去掉 -SkipMemory，或先完成打包）"
     }
 
-    # 开发版（npm start）跑起来进程名是 electron，安装版是 DoTodo。
-    # 两者共用同一个数据目录，也就共用同一把单实例锁：任何一种在跑，
-    # 新起的打包版都会立刻以退出码 0 结束。所以必须一起检测，
-    # 否则这里会把「被锁挡住」误报成「进程没起来」。
-    #
-    # 注意这里刻意不按「进程路径在 $repoRoot 下」过滤：锁是按数据目录
-    # （%APPDATA%\dotodo）算的，跟可执行文件放在哪个目录无关。当验证在
-    # 克隆出来的第二份仓库里运行时，从原仓库 npm start 起来的实例路径
-    # 并不在 $repoRoot 下，按路径过滤就会看不见它，于是又误报一次。
-    # 判断依据改成「这个名字/这个路径属于 DoTodo」：安装版直接看进程名，
-    # 开发版看可执行文件路径里有没有 dotodo（原仓库、克隆仓库都命中），
-    # 同时不会牵扯到机器上别的 Electron 应用。
-    $running = @(
-      Get-Process -Name 'DoTodo', 'electron' -ErrorAction SilentlyContinue |
-        Where-Object { $_.ProcessName -eq 'DoTodo' -or $_.Path -like '*dotodo*' }
-    )
-    if ($running.Count -gt 0) {
-      Write-Host "检测到 $($running.Count) 个 DoTodo 进程正在运行，跳过内存测量：" -ForegroundColor Yellow
-      Write-Host "  $($running[0].ProcessName)（$($running[0].Path)）"
-      Write-Host '  开发版与安装版共用数据目录和单实例锁，新进程会立刻退出。'
-      Write-Host '  收尾时也不该动你正在用的窗口。要测就先全部关掉。'
-      return
-    }
-
-    Write-Host '启动打包后的应用（会使用真实用户数据目录）……'
-    $started = Start-Process -FilePath $executable -PassThru
+    # 用一次性数据目录启动这个打包版，图三件事：
+    #   1. 不撞单实例锁。锁是按数据目录（%APPDATA%\dotodo）算的，开发版
+    #      （npm start）和安装版共用它。用真实目录启动的话，只要桌面上开着
+    #      这个应用，这一步就永远只能「跳过」——而一个永远跳过的步骤等于
+    #      没有验证，它坏掉了也没人知道。
+    #   2. 不碰你真实的数据。打包版启动时会做一次日切准备，可能写归档。
+    #   3. 不必去猜哪些进程是别人的，也就不必关掉你正开着的窗口。
+    # 空清单对「空闲内存」这个数字没有影响。
+    $probeData = Join-Path $env:TEMP ("dotodo-mem-" + [guid]::NewGuid().ToString('N'))
+    Write-Host '启动打包后的应用（一次性数据目录，测完删掉）……'
+    $app = Start-Process -FilePath $executable -ArgumentList "--user-data-dir=$probeData" -PassThru
     try {
       Start-Sleep -Seconds 8
-      $tree = @(Get-Process -Name 'DoTodo' -ErrorAction SilentlyContinue)
+      $tree = @(Get-Process -Id (Get-ProcessTreeId -RootId $app.Id) -ErrorAction SilentlyContinue)
       if ($tree.Count -eq 0) {
-        $code = if ($started.HasExited) { $started.ExitCode } else { '未知' }
-        throw "打包后的应用没有起来（退出码 $code）。退出码 0 通常意味着单实例锁已被占用。"
+        $code = if ($app.HasExited) { $app.ExitCode } else { '未知' }
+        throw "打包后的应用没有起来（退出码 $code）。"
       }
       $workingSet = ($tree | Measure-Object -Property WorkingSet64 -Sum).Sum
       $privateBytes = ($tree | Measure-Object -Property PrivateMemorySize64 -Sum).Sum
@@ -252,10 +257,15 @@ if (-not $SkipMemory) {
       Write-Host ("私有内存合计  : {0}" -f (Format-Bytes $privateBytes))
       Write-Host '参考：Chromium 多进程模型下，一个进程 60–120 MB 属于正常范围。'
     } finally {
-      # 只收自己拉起来的那个进程。之前这里是「把所有 DoTodo 进程都杀掉」，
+      # 只收自己拉起来的那一个。曾经这里是「把所有 DoTodo 进程都杀掉」，
       # 那等于替用户关掉他正开着的应用——脚本没这个权力。
-      if ($started -and -not $started.HasExited) {
-        Stop-Process -Id $started.Id -Force -ErrorAction SilentlyContinue
+      if ($app -and -not $app.HasExited) {
+        Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+      }
+      for ($attempt = 0; $attempt -lt 3; $attempt++) {
+        Start-Sleep -Milliseconds 500
+        if (-not (Test-Path $probeData)) { break }
+        Remove-Item $probeData -Recurse -Force -ErrorAction SilentlyContinue
       }
     }
   }
