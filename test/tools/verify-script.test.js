@@ -76,23 +76,14 @@ test('内存测量用一次性数据目录启动打包版', () => {
   assert.match(text, /Remove-Item \$probeData -Recurse -Force/);
 });
 
-test('环境信息会等 electron 二进制就位，而不是直接判死', () => {
-  // npm ci 在 electron 二进制落地之前就返回，实测差约半秒。这段窗口里
-  // Test-Path 拿到 False，脚本会报「请先执行 npm install」—— 而用户刚执行完，
-  // 紧接着的 npm test 也会因为 electron 包自我修复失败而红。
-  assert.match(text, /function Wait-ForElectronBinary/);
-  assert.match(text, /\$electronBinary = Wait-ForElectronBinary/);
-  assert.doesNotMatch(
-    text,
-    /Test-Path \$electronBinary/,
-    '别再退回「Test-Path 一下，没有就抛」的老写法。'
-  );
-});
-
-test('等待 electron 二进制是有上限的', () => {
-  // 没上限的话，依赖真的没装时脚本会一直挂着，而不是报错。
-  assert.match(text, /\[int\]\$TimeoutSeconds = \d+/);
-  assert.match(text, /return \$null/);
+test('环境信息直接检查 electron 二进制，不靠等待来掩盖', () => {
+  // 这条路径上曾经加过 30 秒轮询等待，因为观察到「npm ci 之后二进制迟一点
+  // 才出现」。后来查清是 electron 42 起上游取消了 postinstall，二进制根本不会
+  // 随 npm install 下载 —— 那不是竞态，是没装。等待只会把一个坏掉的安装
+  // 拖成 30 秒的沉默，所以改回直接检查，真正的修复放在 postinstall 里。
+  assert.match(text, /\$electronBinary = Join-Path \$repoRoot 'node_modules\\electron\\dist\\electron\.exe'/);
+  assert.match(text, /Test-Path \$electronBinary/);
+  assert.doesNotMatch(text, /Wait-ForElectronBinary/, '别再用等待掩盖安装缺失。');
 });
 
 test('内存测量只统计自己那棵进程树', () => {

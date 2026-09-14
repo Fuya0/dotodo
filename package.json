@@ -6,6 +6,7 @@
   "author": "DoTodo Contributors",
   "license": "MIT",
   "scripts": {
+    "postinstall": "node tools/ensure-electron-binary.js",
     "prepare": "node tools/install-git-hooks.js",
     "start": "electron .",
     "test": "node --test \"test/**/*.test.js\"",

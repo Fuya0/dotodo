@@ -24,6 +24,20 @@ npm install
 npm start
 ```
 
+`npm install` 会顺带下载 Electron 二进制（约 150 MB）。这是必要的：**electron
+从 42 起上游取消了 postinstall**，二进制不再随安装下载，而是第一次用到时才拉。
+我们的测试是多个文件并行跑、都会 `require('electron')`，如果不在这里装好，
+新克隆的仓库第一次 `npm test` 会有几个进程同时下载解压、撞在一起报
+`os error 183`。所以 `package.json` 里补了自己的 `postinstall`
+（`tools/ensure-electron-binary.js`）。
+
+国内网络如果这一步很慢或失败，先设镜像再装：
+
+```powershell
+$env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
+npm install
+```
+
 打包安装程序（Windows）：
 
 ```powershell
