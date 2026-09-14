@@ -7,7 +7,7 @@
 | 改动 | 目的 |
 | --- | --- |
 | `docs/learning/electron/README.md` | 课程总索引：9 课 + 附录，每课的时长、习题、判分命令 |
-| `exercises/electron/README.md` | 习题总索引：8 组 44 题 87 条判分测试 |
+| `exercises/electron/README.md` | 习题总索引：8 组 53 题 112 条判分测试 |
 | `docs/learning/electron/appendix-desktop-stack-and-packaging.md` | 把早期技术栈调研里**还成立**的结论留下来 |
 | 删除三份 WPF 路线文档 | 那条路已经放弃，操作步骤没有保留价值 |
 | `README.md` 重写 | 面向使用者和学习者分别给入口 |
