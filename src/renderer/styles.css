@@ -421,6 +421,14 @@ h1 {
   box-shadow: inset 2px 0 0 var(--ink-dim);
 }
 
+/*
+ * 落到列表末尾时没有"下一行"可以画左侧提示，改成标在最后一行的下边缘。
+ * 少了这条，拖到底部就没有任何落点反馈。
+ */
+.todo-row.drag-over-end {
+  box-shadow: inset 0 -2px 0 var(--ink-dim);
+}
+
 @keyframes arrive {
   from {
     opacity: 0;

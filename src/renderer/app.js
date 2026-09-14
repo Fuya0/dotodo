@@ -441,7 +441,15 @@ function onDragMove(event) {
 
   drop.targetIndex = targetIndex;
   clearDropMarker();
-  if (others[targetIndex]) others[targetIndex].classList.add('drag-over');
+  if (targetIndex >= others.length) {
+    // 落到末尾：这时没有"下一行"可以画左侧提示，改标在最后一行的下边缘。
+    // 以前这里直接 others[targetIndex] 取到 undefined 就什么都不画 ——
+    // 拖到底部既看不到提示、松手后位置也差一格。
+    const last = others[others.length - 1];
+    if (last) last.classList.add('drag-over', 'drag-over-end');
+  } else if (others[targetIndex]) {
+    others[targetIndex].classList.add('drag-over');
+  }
 }
 
 async function endDrag(event) {
@@ -473,7 +481,9 @@ function cleanupDrag() {
 }
 
 function clearDropMarker() {
-  for (const row of dom.list.querySelectorAll('.drag-over')) row.classList.remove('drag-over');
+  for (const row of dom.list.querySelectorAll('.drag-over, .drag-over-end')) {
+    row.classList.remove('drag-over', 'drag-over-end');
+  }
 }
 
 function rowsOf() {

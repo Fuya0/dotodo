@@ -266,12 +266,34 @@ test('resolveDropIndex 用中点判断落点', () => {
   assert.equal(resolveDropIndex([10, 20, 30], 5), 0);
   assert.equal(resolveDropIndex([10, 20, 30], 15), 1);
   assert.equal(resolveDropIndex([10, 20, 30], 25), 2);
-  assert.equal(resolveDropIndex([10, 20, 30], 100), 2);
+  // 越过最后一个中点是"插到末尾"。插入位置的含义是「插到 others[k] 之前」，
+  // others 有 3 个元素，所以"最后"是 3，不是 2 —— 这条原来写的是 2，
+  // 把差一格的 bug 当成期望值固化了下来。
+  assert.equal(resolveDropIndex([10, 20, 30], 100), 3);
 });
 
 test('resolveDropIndex 恰好等于中点时落到下一个位置', () => {
   assert.equal(resolveDropIndex([10, 20, 30], 10), 1);
-  assert.equal(resolveDropIndex([10, 20, 30], 30), 2);
+  assert.equal(resolveDropIndex([10, 20, 30], 30), 3);
+});
+
+test('拖到列表底部时那一行真的排到最后', () => {
+  // 按结果断言，而不是只对下标：一次真机验收报的是
+  // "拖拽的时候位置和实际替换的内容不一致"，只有把插入结果算出来才发现差一格。
+  const others = ['B', 'C', 'D', 'E'];
+  const targetIndex = resolveDropIndex([10, 20, 30, 40], 999);
+  const reordered = [...others];
+  reordered.splice(targetIndex, 0, 'A');
+  assert.deepEqual(reordered, ['B', 'C', 'D', 'E', 'A']);
+});
+
+test('拖到中间时插到指针所在的那两行之间', () => {
+  const others = ['B', 'C', 'D', 'E'];
+  // 指针落在 C 的中点(20)和 D 的中点(30)之间 → 插到 D 之前
+  const targetIndex = resolveDropIndex([10, 20, 30, 40], 25);
+  const reordered = [...others];
+  reordered.splice(targetIndex, 0, 'A');
+  assert.deepEqual(reordered, ['B', 'C', 'A', 'D', 'E']);
 });
 
 test('resolveDropIndex 对空列表返回 -1', () => {

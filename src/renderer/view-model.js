@@ -103,11 +103,17 @@ function deriveSettingsView(snapshot) {
  * 拖拽落点：`midpoints` 是除被拖行之外每一行的垂直中点。
  * 指针越过第 i 个中点就落到下一个位置，越过最后一个中点则落到末尾。
  * 返回的是「移除被拖行之后」的下标，正好是 reorderTask 需要的目标位置。
+ *
+ * 越过末尾时返回 `midpoints.length`，**不是** `length - 1`。
+ * 插入位置 k 的含义是「插到 others[k] 之前」，而 others 有 length 个元素，
+ * 所以「插到最后」是 length。返回 length - 1 会让被拖的行走不到末尾：
+ * 差一格，而且那个下标上还有一行，落点提示会画在"倒数第二行之前"。
+ * 这个错误是一次真机验收报出来的（"位置和实际替换的内容不一致"）。
  */
 function resolveDropIndex(midpoints, clientY) {
   if (!Array.isArray(midpoints) || midpoints.length === 0) return -1;
   const index = midpoints.findIndex((midpoint) => clientY < midpoint);
-  return index === -1 ? midpoints.length - 1 : index;
+  return index === -1 ? midpoints.length : index;
 }
 
 /** 一行任务只暴露界面真正需要的字段，顺序由 position 表达。 */

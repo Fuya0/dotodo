@@ -134,6 +134,41 @@ check('拖拽结束后没有残留的拖拽状态', qa('.todo-row.dragging').len
 check('拖拽结束后没有残留的落点提示', qa('.todo-row.drag-over').length === 0);
 check('拖拽没有丢掉任何任务', rows().length === countBeforeDrag, `${rows().length} vs ${countBeforeDrag}`);
 
+/* ---------- 拖到列表最底部 ---------- */
+// 一次真机验收报的是"位置和实际替换的内容不一致、很不灵敏"。
+// 原因是越过最后一个中点时返回了下标 length - 1：差一格，而且那个下标上还有行，
+// 落点提示被画到"倒数第二行之前"，拖到底部等于没有任何反馈。
+// 这里把整条路径走一遍：拖到最底 → 有末尾提示 → 松手后真的排到最后。
+
+const textAtBottom = rowTexts()[rows().length - 1];
+const textBeingMoved = rowTexts()[0];
+const bottomHandle = rows()[0].querySelector('.drag-handle');
+const bottomHandleRect = bottomHandle.getBoundingClientRect();
+const listRect = q('#todoList').getBoundingClientRect();
+
+bottomHandle.dispatchEvent(new PointerEvent('pointerdown', {
+  bubbles: true, cancelable: true, button: 0, pointerId: 8,
+  clientY: bottomHandleRect.top + bottomHandleRect.height / 2
+}));
+window.dispatchEvent(new PointerEvent('pointermove', {
+  bubbles: true, pointerId: 8, clientY: listRect.bottom + 50
+}));
+
+check('拖到列表下方时出现「落到末尾」的提示',
+  qa('.todo-row.drag-over-end').length === 1,
+  `实际 ${qa('.todo-row.drag-over-end').length} 个`);
+
+window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 8 }));
+
+await expect('被拖的那一行真的排到了最后',
+  () => rowTexts()[rows().length - 1] === textBeingMoved,
+  () => `末行是「${rowTexts()[rows().length - 1]}」，期望「${textBeingMoved}」`);
+check('原来的末行被顶到了倒数第二',
+  rowTexts()[rows().length - 2] === textAtBottom,
+  `倒数第二行是「${rowTexts()[rows().length - 2]}」，期望「${textAtBottom}」`);
+check('落到末尾之后没有残留的落点提示',
+  qa('.todo-row.drag-over, .todo-row.drag-over-end').length === 0);
+
 /* ---------- 拖拽取消 ---------- */
 // pointerleave 是「用户把行拖出列表」的取消路径，必须不改变顺序。
 
