@@ -19,7 +19,7 @@
 param(
   # 跳过 electron-builder 打包（只想快速跑测试时用）。
   [switch]$SkipPack,
-  # 跳过空闲内存测量（不想启动打包后的应用时用）。
+  # 跳过启动打包后的应用的两步：打包版壳层启动、空闲内存测量。
   [switch]$SkipMemory,
   # 指定已存在的打包目录，配合 -SkipPack 使用。
   [string]$PackagedDirectory
@@ -226,6 +226,72 @@ Invoke-Step '打包产物体积分类' {
 }
 
 if (-not $SkipMemory) {
+  Invoke-Step '打包版壳层启动' {
+    # npm run smoke 跑的是开发版（electron .）。打包进 app.asar 之后代码还认不认
+    # 得路径、托盘还建不建得起来，是另一回事，之前没有任何一步验证过。
+    # 这一步跑打包版自己的 --smoke-test，确认壳层真的起来了。
+    #
+    # 断言只落在 stdout 的标记上：Start-Process 配合输出重定向时，
+    # $process.ExitCode 取不到值（HasExited 为真但 ExitCode 为空），
+    # 拿退出码判断会得到「什么都没发生」的假象。
+    $executable = Join-Path $resolvedPackagedDirectory 'DoTodo.exe'
+    if (-not (Test-Path $executable)) {
+      throw "找不到 $executable（去掉 -SkipMemory，或先完成打包）"
+    }
+
+    $probeData = Join-Path $env:TEMP ("dotodo-boot-" + [guid]::NewGuid().ToString('N'))
+    $stdout = "$probeData.out"
+    $stderr = "$probeData.err"
+    $previousData = $env:DOTODO_SMOKE_USER_DATA
+    # 打包版的 smoke 模式要求这个变量，缺了会直接拒绝启动 —— 这是好事：
+    # 它保证冒烟永远不可能碰到真实数据。
+    $env:DOTODO_SMOKE_USER_DATA = $probeData
+    $app = $null
+    try {
+      Write-Host '用 --smoke-test 启动打包版（一次性数据目录）……'
+      $app = Start-Process -FilePath $executable -ArgumentList '--smoke-test' -PassThru `
+        -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+      if (-not $app.WaitForExit(30000)) {
+        throw '打包版 30 秒内没有自己退出，壳层可能卡住了。'
+      }
+      $text = if (Test-Path $stdout) { Get-Content $stdout -Raw -Encoding UTF8 } else { '' }
+      if ($text -notmatch 'DOTODO_SMOKE_READY') {
+        throw "打包版没有报告 DOTODO_SMOKE_READY。标准输出：`n$text"
+      }
+      $boot = [regex]::Match($text, 'DOTODO_SHELL_BOOT (\{.*\})')
+      if (-not $boot.Success) {
+        throw "打包版没有报告壳层启动结果。标准输出：`n$text"
+      }
+      $shell = $boot.Groups[1].Value | ConvertFrom-Json
+      if (-not $shell.trayCreated) {
+        throw '打包版的托盘图标没有创建成功。'
+      }
+      Write-Host '✓ 打包版的壳层启动成功，托盘图标已创建。'
+      if ($shell.shortcut -and $shell.shortcut.warning) {
+        # 别的实例占着全局快捷键时属于正常降级，不是失败。
+        Write-Host "  快捷键降级（正常）：$($shell.shortcut.warning)"
+      }
+      if ($shell.warnings.Count -gt 0) {
+        Write-Host "  壳层警告：$($shell.warnings -join '；')" -ForegroundColor Yellow
+      }
+    } finally {
+      if ($app -and -not $app.HasExited) {
+        Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+      }
+      if ($null -eq $previousData) { Remove-Item Env:\DOTODO_SMOKE_USER_DATA -ErrorAction SilentlyContinue }
+      else { $env:DOTODO_SMOKE_USER_DATA = $previousData }
+      for ($attempt = 0; $attempt -lt 3; $attempt++) {
+        Start-Sleep -Milliseconds 400
+        Remove-Item $probeData -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item $stdout -Force -ErrorAction SilentlyContinue
+        Remove-Item $stderr -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path $probeData)) { break }
+      }
+    }
+  }
+}
+
+if (-not $SkipMemory) {
   Invoke-Step '打包应用空闲内存' {
     $executable = Join-Path $resolvedPackagedDirectory 'DoTodo.exe'
     if (-not (Test-Path $executable)) {
@@ -242,13 +308,16 @@ if (-not $SkipMemory) {
     # 空清单对「空闲内存」这个数字没有影响。
     $probeData = Join-Path $env:TEMP ("dotodo-mem-" + [guid]::NewGuid().ToString('N'))
     Write-Host '启动打包后的应用（一次性数据目录，测完删掉）……'
+    # 先置空：Set-StrictMode 下引用没赋过值的变量会抛异常，
+    # 万一 Start-Process 自己就失败了，finally 里不能崩第二次。
+    $app = $null
     $app = Start-Process -FilePath $executable -ArgumentList "--user-data-dir=$probeData" -PassThru
     try {
       Start-Sleep -Seconds 8
       $tree = @(Get-Process -Id (Get-ProcessTreeId -RootId $app.Id) -ErrorAction SilentlyContinue)
       if ($tree.Count -eq 0) {
-        $code = if ($app.HasExited) { $app.ExitCode } else { '未知' }
-        throw "打包后的应用没有起来（退出码 $code）。"
+        # 不报 ExitCode：Start-Process 拿不到它（见上一步的说明）。
+        throw '打包后的应用没有起来（进程树是空的）。'
       }
       $workingSet = ($tree | Measure-Object -Property WorkingSet64 -Sum).Sum
       $privateBytes = ($tree | Measure-Object -Property PrivateMemorySize64 -Sum).Sum

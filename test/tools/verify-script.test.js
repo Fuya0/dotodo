@@ -38,6 +38,35 @@ test('verify-electron.ps1 不靠进程名判断要不要跳过验证', () => {
   assert.doesNotMatch(text, /Get-Process -Name 'DoTodo'/);
 });
 
+test('打包版冒烟断言在 stdout 标记上，不靠退出码', () => {
+  // npm run smoke 跑的是开发版；打包进 app.asar 之后能不能起来是另一回事。
+  // 实测 Start-Process 配合输出重定向时 $process.ExitCode 取不到值
+  // （HasExited 为真、ExitCode 为空），所以断言必须落在 stdout 上，
+  // 否则这一步会「静默通过」——什么都没检查却显示成功。
+  // 光断言「文件里出现过这个字符串」太弱：删掉检查、把词留在注释里也能过。
+  // 这里断言的是「真的在拿这个标记做判断」。
+  assert.match(text, /\$text -notmatch 'DOTODO_SMOKE_READY'/);
+  assert.match(text, /\[regex\]::Match\(\$text, 'DOTODO_SHELL_BOOT/);
+  assert.match(text, /-not \$shell\.trayCreated/);
+  // 只看代码行：注释里提到 ExitCode 是为了解释为什么不能用它。
+  const exitCodeLines = text
+    .split(/\r?\n/)
+    .map((line, index) => ({ line: line.trim(), number: index + 1 }))
+    .filter((entry) => entry.line.includes('.ExitCode') && !entry.line.startsWith('#'));
+  assert.deepEqual(
+    exitCodeLines.map((entry) => entry.number),
+    [],
+    '拿不到 ExitCode 的地方不要假装能拿它判断。'
+  );
+});
+
+test('打包版冒烟用一次性数据目录', () => {
+  // 打包版的 smoke 模式要求 DOTODO_SMOKE_USER_DATA，缺了直接拒绝启动。
+  // 这正是我们要的：冒烟不可能碰到用户真实数据。
+  assert.match(text, /\$env:DOTODO_SMOKE_USER_DATA = \$probeData/);
+  assert.match(text, /-ArgumentList '--smoke-test'/);
+});
+
 test('内存测量用一次性数据目录启动打包版', () => {
   // 曾经这里用真实用户数据目录启动，然后「检测到有 DoTodo 在跑就跳过」。
   // 那意味着只要桌面上开着这个应用，这一步永远是跳过的——等于没有验证，
