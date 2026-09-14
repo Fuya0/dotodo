@@ -17,6 +17,7 @@
     "paths": "electron . --print-paths",
     "verify:win": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/verify-electron.ps1",
     "verify:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/verify-installer.ps1",
+    "acceptance": "node tools/acceptance-prep.js",
     "pack": "electron-builder --dir",
     "dist:win": "electron-builder --win nsis",
     "dist:mac": "electron-builder --mac dmg zip",

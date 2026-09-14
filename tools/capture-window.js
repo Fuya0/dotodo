@@ -61,6 +61,10 @@ function task(text, { completed = false, at = '08:00:00.000' } = {}) {
 }
 
 function buildDemoState() {
+  // 计数器每次从 0 开始，这个函数才是可复现的：同一进程里调用两次，
+  // 拿到的 id 也完全一样。之前它是模块级的、只增不减，第二次调用会接着
+  // 往下排号，于是"同一份演示数据"其实每次不同 —— 验收准备那里就撞上了。
+  sequence = 0;
   const today = localDate(0);
   const yesterday = localDate(-1);
   return {
