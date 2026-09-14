@@ -19,6 +19,9 @@ const { formatLocalInstant } = require('./electron/local-time');
 const { createShellController } = require('./electron/shell-controller');
 const { createWindowController } = require('./electron/window-controller');
 
+/** 主进程主动推快照用的频道。它不走 invoke/handle，所以不在 ipc.js 的 CHANNELS 表里。 */
+const SNAPSHOT_CHANNEL = 'state:changed';
+
 let engine = null;
 let store = null;
 let windowController = null;
@@ -68,9 +71,23 @@ function markSaveFailure(error) {
   currentSaveError = `数据暂时只保存在内存中：${error.message}`;
 }
 
+/**
+ * 把「损坏的原文件保留在哪」如实告诉用户。
+ *
+ * `addWarning` 自带去重，所以可以在每次保存之后无脑调一次——这样即使坏文件是在
+ * 某次 save() 轮转备份时才第一次被发现（而不是启动时），用户也能拿到路径。
+ */
+function reportPreservedFiles() {
+  if (!store) return;
+  for (const preservedPath of store.getPreservedCorruptFiles()) {
+    addWarning(`损坏的原文件已保留在：${preservedPath}`);
+  }
+}
+
 function markSaved() {
   hasUnsavedChanges = false;
   currentSaveError = null;
+  reportPreservedFiles();
 }
 
 function getRuntimeStatus() {
@@ -231,8 +248,21 @@ function persistSettings(patch) {
 }
 
 /**
+ * 把最新快照推给渲染进程。
+ *
+ * IPC 命令会自己带上快照，但**托盘菜单改的设置不会经过渲染进程**：
+ * 用户在托盘里切了「窗口置顶」，设置面板里的选中态就一直是旧的，
+ * 直到别的原因触发一次重绘。所以主进程主动推一次。
+ */
+function broadcastSnapshot() {
+  const window = windowController?.getWindow();
+  if (!window || (typeof window.isDestroyed === 'function' && window.isDestroyed())) return;
+  window.webContents.send(SNAPSHOT_CHANNEL, engine.getSnapshot());
+}
+
+/**
  * 托盘菜单发出的意图。和 IPC 路径的区别是这里没有渲染进程参与，
- * 所以组合根要自己完成「先让系统生效，再写盘，最后刷新菜单」。
+ * 所以组合根要自己完成「先让系统生效，再写盘，最后刷新菜单与界面」。
  */
 async function handleShellIntent(intent) {
   try {
@@ -253,6 +283,8 @@ async function handleShellIntent(intent) {
     addWarning(`托盘操作没有生效：${error.message}`);
   } finally {
     shellController.refreshMenu();
+    // 失败也要推：native 效果可能已经生效、只是没写进配置，界面得反映真实的当前状态。
+    broadcastSnapshot();
   }
 }
 
@@ -280,10 +312,7 @@ async function initialize() {
   store = new JsonStateStore(app.getPath('userData'));
   const loaded = store.load();
   if (loaded.warning) addWarning(loaded.warning);
-  // 恢复过程的证据要说到具体路径：只告诉用户「文件损坏了」等于让他自己去翻目录。
-  for (const preservedPath of loaded.preservedCorruptFiles) {
-    addWarning(`损坏的原文件已保留在：${preservedPath}`);
-  }
+  reportPreservedFiles();
   if (!loaded.writable) hasUnsavedChanges = true;
   const now = formatLocalInstant();
   const initialState = loaded.state || createState(now.slice(0, 10));

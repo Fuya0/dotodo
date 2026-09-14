@@ -19,12 +19,22 @@ class JsonStateStore {
     });
     this.writable = true;
     this.recoverySequence = 0;
+    // 保留下来的恢复文件路径（累积），以及已经留过证据的源文件。
+    // 后者用来去重：同一个坏文件可能被 load() 和后续的 save() 各发现一次，
+    // 不去重就会留下两份内容完全相同的 recovery 文件——用户会以为是两份不同的证据。
+    this.preservedFiles = [];
+    this.preservedSources = new Set();
     this.copyFileSync = copyFileSync;
     this.syncDirectory = syncDirectoryOperation;
   }
 
   getPaths() {
     return { ...this.paths };
+  }
+
+  /** 到目前为止保留过的损坏文件路径。主进程用它把"证据在哪"如实告诉用户。 */
+  getPreservedCorruptFiles() {
+    return [...this.preservedFiles];
   }
 
   load() {
@@ -147,11 +157,17 @@ class JsonStateStore {
   }
 
   #preserveCorruptFile(sourcePath, label, preservedFiles) {
+    // 同一个源文件只留一次。load() 可能已经留过，随后 save() 轮转备份时又会读到同一份坏文件；
+    // 再复制一份只会让用户看到两个名字不同、内容一样的文件。
+    if (this.preservedSources.has(sourcePath)) return;
+
     const recoveryPath = this.#nextRecoveryPath(label);
     try {
       this.copyFileSync(sourcePath, recoveryPath, fs.constants.COPYFILE_EXCL);
       syncFile(recoveryPath);
       this.syncDirectory(this.directory);
+      this.preservedSources.add(sourcePath);
+      this.preservedFiles.push(recoveryPath);
       preservedFiles.push(recoveryPath);
     } catch {
       this.writable = false;

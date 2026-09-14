@@ -52,6 +52,20 @@ test('IPC 注册晚于状态准备与窗口创建', () => {
   assert.ok(engineCreation < ipcRegistration, '引擎必须先于 IPC 注册');
 });
 
+test('托盘改设置之后会主动把快照推给界面', () => {
+  // 托盘菜单不经过渲染进程。少了这次推送，用户在托盘里切了「置顶」，
+  // 设置面板会一直显示旧值，直到别的原因触发一次重绘。
+  const shellIntent = main.match(/async function handleShellIntent[\s\S]*?\n\}/);
+  assert.ok(shellIntent, '找不到 handleShellIntent。');
+  assert.match(shellIntent[0], /broadcastSnapshot\(\)/);
+  assert.match(main, /window\.webContents\.send\(SNAPSHOT_CHANNEL/);
+});
+
+test('渲染进程会订阅主进程推来的快照', () => {
+  const app = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'renderer', 'app.js'), 'utf8');
+  assert.match(app, /window\.dotodo\.onSnapshot\(applySnapshot\)/);
+});
+
 test('冒烟模式会汇报壳层启动结果', () => {
   // tools/ui-check.js 靠这一行断言托盘在真实 Electron 里建起来了。
   assert.match(main, /DOTODO_SHELL_BOOT/);

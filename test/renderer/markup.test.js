@@ -117,7 +117,7 @@ test('渲染脚本只调用这一阶段开放的主进程接口', () => {
     'reorderTask', 'deleteHistoryTask', 'continueTask',
     'setWindowMode', 'setCloseToTray', 'setLaunchAtLogin',
     'importData', 'exportData', 'openDataFolder',
-    'minimizeWindow', 'closeWindow'
+    'minimizeWindow', 'closeWindow', 'onSnapshot'
   ]);
   const unexpected = calls.filter((name) => !allowed.has(name));
   assert.deepEqual(unexpected, [], `界面调用了尚未开放的接口：${unexpected.join(', ')}`);

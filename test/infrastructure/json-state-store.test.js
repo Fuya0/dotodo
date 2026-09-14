@@ -27,6 +27,52 @@ function populatedState(date = '2026-09-13', text = '保存我') {
   return engine.addTask(text).snapshot;
 }
 
+function recoveryFilesIn(directory, label) {
+  return fs.readdirSync(directory).filter((entry) => entry.startsWith(`recovery-${label}-`));
+}
+
+test('同一份坏文件在一个进程里只保留一次', (context) => {
+  // 两份都坏时，坏备份会被发现两次：load() 一次，随后的 save() 轮转备份时又一次。
+  // 不去重就会在两个不同的时间点各复制一份，用户看到两个名字不同、内容完全一样的
+  // recovery 文件，会以为是两份不同的证据。
+  assert.equal(typeof infrastructure.JsonStateStore, 'function');
+  const directory = withDirectory(context);
+  const store = new infrastructure.JsonStateStore(directory);
+
+  fs.writeFileSync(path.join(directory, 'state.json'), '{broken primary', 'utf8');
+  fs.writeFileSync(path.join(directory, 'state.backup.json'), 'not json at all', 'utf8');
+
+  const loaded = store.load();
+  assert.equal(loaded.preservedCorruptFiles.length, 2, 'load 应该把两份坏文件都留下来');
+
+  // 恢复之后的两次保存：第一次主文件还是坏的，第二次才会走到备份轮转。
+  store.save(populatedState());
+  store.save(populatedState('2026-09-14'));
+
+  assert.equal(recoveryFilesIn(directory, 'primary').length, 1, '主文件只该留下一份证据');
+  assert.equal(recoveryFilesIn(directory, 'backup').length, 1, '备份也只该留下一份证据');
+  assert.equal(store.getPreservedCorruptFiles().length, 2, '累积列表里也只该有两条');
+});
+
+test('坏文件是在保存过程中才被发现时，路径仍然会被上报', (context) => {
+  // 启动时备份是好的，之后被外部改坏：这时第一次发现发生在 save() 里，
+  // 用户不能因为"启动时没报"就永远不知道有恢复文件。
+  assert.equal(typeof infrastructure.JsonStateStore, 'function');
+  const directory = withDirectory(context);
+  const store = new infrastructure.JsonStateStore(directory);
+
+  store.save(populatedState());
+  store.save(populatedState('2026-09-14'));
+  assert.deepEqual(store.getPreservedCorruptFiles(), []);
+
+  fs.writeFileSync(path.join(directory, 'state.backup.json'), '{broken later', 'utf8');
+  store.save(populatedState('2026-09-15'));
+
+  const preserved = store.getPreservedCorruptFiles();
+  assert.equal(preserved.length, 1);
+  assert.equal(fs.readFileSync(preserved[0], 'utf8'), '{broken later');
+});
+
 test('save and load round-trip a valid state without sharing references', (context) => {
   assert.equal(typeof infrastructure.JsonStateStore, 'function');
   const directory = withDirectory(context);

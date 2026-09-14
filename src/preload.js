@@ -18,5 +18,15 @@ contextBridge.exposeInMainWorld('dotodo', Object.freeze({
   exportData: () => ipcRenderer.invoke('data:export'),
   openDataFolder: () => ipcRenderer.invoke('data:open-folder'),
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
-  closeWindow: () => ipcRenderer.invoke('window:close')
+  closeWindow: () => ipcRenderer.invoke('window:close'),
+  /**
+   * 订阅主进程主动推来的新快照。
+   *
+   * 托盘菜单改设置时渲染进程并不知情，只能由主进程推。回调只拿到快照本身，
+   * 拿不到 IpcRendererEvent —— 那个对象会漏出通道内部结构。
+   */
+  onSnapshot: (handler) => {
+    if (typeof handler !== 'function') return;
+    ipcRenderer.on('state:changed', (_event, snapshot) => handler(snapshot));
+  }
 }));

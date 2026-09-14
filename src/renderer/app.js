@@ -673,6 +673,11 @@ async function init() {
     showMessage(`无法读取本地数据：${describeError(error)}`);
     return;
   }
+  // 托盘菜单里的设置变更不经过渲染进程，只能由主进程推快照过来同步。
+  // 少了这一句，用户在托盘里切了「置顶」，设置面板会一直显示旧值。
+  if (typeof window.dotodo.onSnapshot === 'function') {
+    window.dotodo.onSnapshot(applySnapshot);
+  }
   dom.input.focus();
   refreshStatus();
 }

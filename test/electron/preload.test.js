@@ -7,10 +7,14 @@ const vm = require('node:vm');
 function executePreload() {
   const calls = [];
   const exposed = {};
+  const listeners = new Map();
   const ipcRenderer = {
     invoke: (...args) => {
       calls.push(args);
       return Promise.resolve({ ok: true });
+    },
+    on: (channel, handler) => {
+      listeners.set(channel, handler);
     }
   };
   const contextBridge = {
@@ -27,7 +31,7 @@ function executePreload() {
     },
     Object
   }, { filename: 'preload.js' });
-  return { api: exposed.api, calls, exposedName: exposed.name };
+  return { api: exposed.api, calls, exposedName: exposed.name, listeners };
 }
 
 test('preload exposes a frozen purpose-specific surface', () => {
@@ -46,6 +50,7 @@ test('preload exposes a frozen purpose-specific surface', () => {
     'getStatus',
     'importData',
     'minimizeWindow',
+    'onSnapshot',
     'openDataFolder',
     'reorderTask',
     'setCloseToTray',
@@ -101,6 +106,26 @@ test('preload maps arguments onto fixed IPC channels', async () => {
     ['window:minimize'],
     ['window:close']
   ]);
+});
+
+test('onSnapshot 只把快照交给回调，不漏出 IpcRendererEvent', () => {
+  // 事件对象带着通道内部结构，交到页面手里等于绕开了"窄接口"这条约定。
+  const { api, listeners } = executePreload();
+  const received = [];
+
+  api.onSnapshot((payload) => received.push(payload));
+  assert.equal(listeners.has('state:changed'), true, 'preload 应该在 state:changed 上注册');
+
+  const snapshot = { schemaVersion: 1, activeDay: { date: '2026-09-14', tasks: [] } };
+  listeners.get('state:changed')({ sender: 'main-process' }, snapshot);
+
+  assert.deepEqual(received, [snapshot], '回调应该只收到快照本身');
+});
+
+test('onSnapshot 收到非函数参数时安静地忽略', () => {
+  const { api } = executePreload();
+  assert.doesNotThrow(() => api.onSnapshot('not a function'));
+  assert.doesNotThrow(() => api.onSnapshot(undefined));
 });
 
 test('preload 用到的频道与主进程注册的频道完全一致', async () => {

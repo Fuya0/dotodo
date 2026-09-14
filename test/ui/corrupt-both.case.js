@@ -28,20 +28,18 @@ module.exports = {
     const primaryRecovery = entries.filter((entry) => entry.startsWith('recovery-primary-'));
     const backupRecovery = entries.filter((entry) => entry.startsWith('recovery-backup-'));
 
-    record('主文件的坏数据被保留了', primaryRecovery.length === 1, JSON.stringify(entries));
+    // 一份证据就是一份。坏备份会被 load() 和随后的 save() 各发现一次，
+    // store 内部按源文件去重，所以这里可以断言"正好一份"而不是"至少一份"。
+    record('主文件的坏数据被保留了正好一份', primaryRecovery.length === 1, JSON.stringify(entries));
+    record('备份的坏数据被保留了正好一份', backupRecovery.length === 1, JSON.stringify(entries));
     if (primaryRecovery.length === 1) {
       record('保留的主文件是一字不差的原文',
         fs.readFileSync(path.join(userData, primaryRecovery[0]), 'utf8') === '{broken primary');
     }
-
-    // 坏备份会被保留两次：一次在 load() 发现它的时候，一次在随后的 save() 轮转备份、
-    // 再次读到这份坏文件的时候。第二次之后备份就被合法内容覆盖了，所以总数有界。
-    // 真正的保证是「每一份保留文件都一字不差」，而不是「只保留一份」。
-    record('备份的坏数据被保留了', backupRecovery.length >= 1, JSON.stringify(entries));
-    record('每一份保留的备份都是原文',
-      backupRecovery.length > 0 &&
-        backupRecovery.every((entry) => fs.readFileSync(path.join(userData, entry), 'utf8') === 'not json at all'),
-      JSON.stringify(backupRecovery));
+    if (backupRecovery.length === 1) {
+      record('保留的备份是一字不差的原文',
+        fs.readFileSync(path.join(userData, backupRecovery[0]), 'utf8') === 'not json at all');
+    }
 
     let saved;
     try {
