@@ -163,7 +163,7 @@ npm run icons        # 重新生成托盘图标
 npm run shot         # 把界面渲染成 PNG：可指定底色、页面、窗口尺寸，还能先跑一段脚本再截
 npm run paths        # 打印应用实际使用的数据目录与状态文件路径
 npm run pack         # 打包到 release/win-unpacked（不出安装器）
-npm run verify:win   # 一次跑完：测试 + 冒烟 + 交互 + 打包 + 体积分类 + 空闲内存
+npm run verify:win   # 一次跑完：测试 + 冒烟 + 交互 + 打包 + 体积分类 + 打包版壳层启动 + 空闲内存
 npm run dist:win     # Windows NSIS 安装包
 npm run dist:mac     # macOS dmg + zip（必须在 macOS 上执行）
 ```
