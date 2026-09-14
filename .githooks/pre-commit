@@ -1,0 +1,14 @@
+#!/bin/sh
+# 提交前跑一遍全部测试（约 0.5 秒）。
+#
+# 主要是为了挡住一类很坑的错误：tools/verify-electron.ps1 里全是中文，
+# Windows PowerShell 5.1 必须看到 UTF-8 BOM 才不会按系统 GBK 代码页去读。
+# 而编辑器、脚本、各种工具都很容易顺手把 BOM 删掉 —— 删掉之后脚本满屏
+# 语法错误，却要等到有人真的去跑验证时才发现。已经发生过两次。
+#
+# 顺带挡住「改了实现忘了改测试」。
+#
+# 这个钩子不会自动生效，需要 core.hooksPath 指向 .githooks：
+# package.json 的 prepare 脚本会在 npm install / npm ci 时配置好。
+set -e
+npm test

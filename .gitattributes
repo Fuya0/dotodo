@@ -1,0 +1,4 @@
+# git 钩子由 sh 执行。如果检出时被转成 CRLF，shebang 那一行会变成
+# "#!/bin/sh\r"，sh 会去找一个叫 "/bin/sh\r" 的解释器，报 bad interpreter。
+# 这台开发机上 core.autocrlf=true，所以必须显式禁止转换。
+.githooks/** -text

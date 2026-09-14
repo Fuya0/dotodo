@@ -6,6 +6,7 @@
   "author": "DoTodo Contributors",
   "license": "MIT",
   "scripts": {
+    "prepare": "node tools/install-git-hooks.js",
     "start": "electron .",
     "test": "node --test \"test/**/*.test.js\"",
     "smoke": "node tools/run-smoke.js",

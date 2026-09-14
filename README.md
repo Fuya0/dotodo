@@ -154,6 +154,9 @@ build/                       只用于构建的资源（应用图标 SVG）
 
 ## 命令
 
+`npm install` / `npm ci` 会自动把 git 钩子目录指向 `.githooks`（见 `prepare` 脚本）。
+之后每次提交前都会自动跑一遍 `npm test`，大约 0.5 秒。
+
 ```powershell
 npm start            # 开发运行
 npm test             # 全部测试（180+ 条断言，实际数字跑一次就知道）
