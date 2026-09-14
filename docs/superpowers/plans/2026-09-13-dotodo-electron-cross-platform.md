@@ -76,6 +76,40 @@ regression was caught: the grid put the warning band in row 1, pushing the windo
   and two schema constants were exported but never imported. Both are gone, and a renderer test now
   fails on either kind of drift.
 
+**R10 — Cold-start verification found three defects in the verification script itself.** The documented
+onboarding path was replayed in a throwaway clone instead of the working repo, which is the only way
+these were visible:
+
+- **The memory step measured nothing, or the wrong thing.** It skipped whenever any `DoTodo`/`electron`
+  process was running, decided by filtering on `$repoRoot`. The single-instance lock is keyed on the
+  user data directory, not on where the executable lives, so an instance from a *different* checkout
+  was invisible and the packaged app was reported as "did not start". Its cleanup also ran
+  `Get-Process -Name DoTodo | Stop-Process -Force`, which closes the user's own window. The step now
+  launches the packaged app against a throwaway `--user-data-dir`, sums only its own process tree
+  (`Get-ProcessTreeId`, walking `ParentProcessId`), and stops only the PID it started. A step that
+  always skips is a step that can break unnoticed.
+- **The packaged app had never been started at all.** `npm run smoke` exercises the dev tree
+  (`electron .`); nothing verified that the asar boots the shell. A new step runs the packaged
+  `--smoke-test` and asserts `DOTODO_SMOKE_READY` plus `trayCreated`. The assertions deliberately avoid
+  `ExitCode`: with `Start-Process` and redirected output, `ExitCode` is empty while `HasExited` is
+  true, so an exit-code check would pass by checking nothing.
+- **A broken script was committed.** `tools/verify-electron.ps1` lost its UTF-8 BOM (twice), and
+  Windows PowerShell 5.1 then reads the whole file through the GBK code page and reports a wall of
+  syntax errors. A `.githooks/pre-commit` now runs `npm test` before every commit, wired up by a
+  `prepare` script so `npm ci` configures it automatically; `.gitattributes` pins the hook to LF,
+  because `core.autocrlf=true` would otherwise turn the shebang into `#!/bin/sh\r`.
+
+**R11 — `npm ci` could not produce a working checkout.** The project pins Electron 44.3.0, and upstream
+removed the `postinstall` script (`node install.js`) in Electron 42. `npm install electron@44.3.0` in an
+empty directory therefore exits 0 and leaves no binary at all — it is downloaded lazily on first use.
+Because `node --test` runs test files in parallel and several of them `require('electron')`, the first
+`npm test` after a fresh install had multiple processes racing to download and extract into the same
+directory, failing with `os error 183` and `Electron failed to install correctly`. This is exactly the
+first thing a new contributor does. The repository now ships its own `postinstall`
+(`tools/ensure-electron-binary.js`, idempotent, calls Electron's own `install.js`) so the download
+happens once during install. Verified end to end by deleting `node_modules`, running `npm ci`, and
+running the full `verify:win` immediately: 8/8 green.
+
 
 ## Global Constraints
 
