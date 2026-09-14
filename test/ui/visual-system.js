@@ -9,7 +9,7 @@
  *   2. 文字在最坏壁纸上还读不读得出来。面板半透明，最坏情况是压在纯白上；
  *      旧配色的 --muted 在那个底色上只有 2.8:1，远低于 WCAG AA 的 4.5:1。
  *
- * 这两条不依赖审美，所以可以钉死。剩下的（圆角好不好看、投影重不重）仍然只能人看。
+ * 这三条不依赖审美，所以可以钉死。剩下的（圆角好不好看、层次够不够）仍然只能人看。
  */
 
 function parseColor(value) {
@@ -73,6 +73,13 @@ check('标题栏和内容区都不带整体透明度',
   getComputedStyle(q('.titlebar')).opacity === '1' && getComputedStyle(q('#todayPage')).opacity === '1');
 check('外壳有圆角', parseFloat(getComputedStyle(q('.app-shell')).borderTopLeftRadius) > 0,
   getComputedStyle(q('.app-shell')).borderTopLeftRadius);
+
+// 窗口只比外壳大 6px（body 的 padding），所以任何外投影都会被窗口边界裁成
+// 围着面板的一圈灰框 —— 实测左边缘中点比壁纸暗 46/255。这条是用户报过两次的问题，
+// 钉在这里，免得哪天"让它更有层次感"又加回去。
+check('外壳没有外投影（窗口只比它大 6px，投影会被裁成一圈灰框）',
+  getComputedStyle(q('.app-shell')).boxShadow === 'none',
+  getComputedStyle(q('.app-shell')).boxShadow);
 
 // 深色壁纸下卡片和背景都是暗的，界限只能靠这圈描边。所以要断言它真的存在且有颜色。
 const shellStyle = getComputedStyle(q('.app-shell'));

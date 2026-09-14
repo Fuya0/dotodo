@@ -52,7 +52,6 @@
   --danger: #e06c60;
   --danger-soft: rgba(224, 108, 96, 0.12);
 
-  --shadow: 0 24px 60px rgba(0, 0, 0, 0.46), 0 2px 10px rgba(0, 0, 0, 0.3);
   --radius: 14px;
   --ease: 180ms cubic-bezier(0.32, 0.72, 0, 1);
 }
@@ -107,6 +106,16 @@ input:focus-visible {
  *
  * 提示条是**在流内**的一行，不再是绝对定位——以前它会盖住"今天要做"标题。
  */
+/*
+ * 没有投影，这是刻意的 —— 别再给它加回去。
+ *
+ * 窗口只比这块面板大 6px（`body` 的 padding），而投影的模糊半径是 60px。
+ * 被窗口边界裁掉之后，剩下的那点正好全落在这 6px 里，看上去就是围着面板
+ * 转了一圈灰框。实测：窗口左边缘中点比壁纸暗 46/255，角落只暗 5 —— 典型的
+ * 阴影梯度。
+ *
+ * 而且它是个贴在桌面上的平面部件，本来就不该有悬浮投影。边界靠 1px 描边交代。
+ */
 .app-shell {
   position: relative;
   display: grid;
@@ -116,7 +125,6 @@ input:focus-visible {
   overflow: hidden;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
 }
 
 .app-shell::before {
