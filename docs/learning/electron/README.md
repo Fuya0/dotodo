@@ -39,7 +39,7 @@ npm start
 | [01](01-process-model-and-pure-domain.md) | 不依赖 Electron 的纯 JavaScript 领域层 | 45 min | 5 题 | `node exercises/electron/01-process-model/starter.test.js` |
 | [02](02-node-files-and-json.md) | Node 文件系统、原子写入与损坏恢复 | 50 min | 5 题 | `node exercises/electron/02-storage/starter.test.js` |
 | [03](03-main-preload-renderer.md) | Main / Preload / Renderer 与安全 IPC 边界 | 60 min | 4 题 | `node exercises/electron/03-ipc/starter.test.js` |
-| [04](04-browser-window-and-glass-ui.md) | 透明窗口、深色玻璃与 DOM 投影 | 60 min | 6 题 | `node exercises/electron/04-renderer/starter.test.js` |
+| [04](04-browser-window-and-glass-ui.md) | 透明窗口、深色玻璃与 DOM 投影 | 70 min | 9 题 | `node exercises/electron/04-renderer/starter.test.js` |
 | [05](05-state-driven-interactions.md) | 状态驱动的交互：历史、撤销、拖拽、设置 | 75 min | 6 题 | `node exercises/electron/05-interactions/starter.test.js` |
 | [06](06-native-shell.md) | 托盘、全局快捷键、窗口层级、开机启动 | 70 min | 6 题 | `node exercises/electron/06-native-shell/starter.test.js` |
 | [07](07-debug-test-verify.md) | 导入导出、数据恢复与验证工作流 | 45 min | 12 题 | `node exercises/electron/07-testing/starter.test.js` |

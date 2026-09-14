@@ -6,7 +6,7 @@
 
 ## 使用方法
 
-打开 `starter.js`，把 6 个占位函数实现完，然后运行：
+打开 `starter.js`，把 9 个占位函数实现完，然后运行：
 
 ```powershell
 node exercises/electron/04-renderer/starter.test.js
@@ -55,9 +55,13 @@ node exercises/electron/04-renderer/starter.test.js
 
 键盘上下移动时的下一个焦点下标。
 
-- 先把 `current` 夹到 `0 … total - 1`，再加 `delta`，再夹一次；
+- 返回 `clamp(current + delta, 0, total - 1)`；**只在最后夹一次**，不要先把 `current` 夹一遍
+  （只在最后夹，`current` 越界时的结果才和测试一致）；
 - 两端**夹紧**，不循环；
 - `total <= 0` 时返回 `-1`。
+
+注意 `current` 越界属于防御性情况——真实使用中它总在范围内。但正因为如此，
+"先夹一次还是只夹最后"这种差异平时看不出来，只有边界测试能钉住它。
 
 ### 5. `describeSurface({ r, g, b, alpha })`
 
@@ -88,6 +92,57 @@ buildClassName({ completed: true, selected: false, continued: false }) → 'todo
 - 基础类永远是 `todo-row`，放在最前；
 - 三个修饰类按 `completed`、`selected`、`continued` 的顺序拼；
 - 只拼生效的，不要出现多余空格或末尾空格。
+
+## 第二部分：把「看得清」算出来
+
+这一组来自一次真实的修复。最早的问题是「面板调透明之后字看不清」——听起来像审美，
+其实是可以算的：面板半透明，**最坏情况是它压在纯白壁纸上**，那时浅色文字还剩多少对比度，
+用 WCAG 公式就能得出一个数字。旧配色在那个底色上只有 2.8:1，远低于可访问性下限 4.5:1。
+
+### 7. `parseColor(value)`
+
+把 `rgb()` / `rgba()` 字符串解析成对象：
+
+```js
+parseColor('rgb(255, 0, 0)')          → { r: 255, g: 0, b: 0, a: 1 }
+parseColor('rgba(28, 28, 30, 0.88)')  → { r: 28, g: 28, b: 30, a: 0.88 }
+```
+
+- 没有 alpha 时补 `1`；
+- 数字之间可以有空格，也可以没有；
+- 不认识的写法（十六进制、`transparent`、数字个数不对、出现非数字）→ `null`。
+  计算样式给出来的一定是 `rgb()`/`rgba()`，所以不需要支持十六进制。
+
+### 8. `compositeOver(foreground, background)`
+
+把半透明的前景压在**不透明**的背景上，返回不透明的结果（`a` 恒为 `1`）：
+
+```js
+compositeOver({ r: 255, g: 255, b: 255, a: 0.5 }, { r: 0, g: 0, b: 0, a: 1 })
+→ { r: 127.5, g: 127.5, b: 127.5, a: 1 }
+```
+
+公式是 `前景 * alpha + 背景 * (1 - alpha)`，逐通道。不要取整。
+
+**这题是我自己写错的地方。** 第一版实现把「背景」当成一个数字直接乘，
+而它其实是一个 `{ r, g, b }`，于是三个通道全变成 `NaN`，对比度算出来也是 `NaN`——
+而 `NaN >= 4.5` 是 `false`，所以界面看起来"检测到了问题"，其实什么都没算。
+
+### 9. `contrastRatio(foreground, background)`
+
+WCAG 对比度：
+
+```js
+contrastRatio(白, 黑)        → 21
+contrastRatio(同一个颜色, 它自己) → 1
+```
+
+- 先把每个通道从 `0–255` 归一化到 `0–1`，做 gamma 校正
+  （`c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4`）；
+- 相对亮度 = `0.2126R + 0.7152G + 0.0722B`；
+- 对比度 = `(较亮 + 0.05) / (较暗 + 0.05)`，**与前后顺序无关**。
+
+边界很好记：最大值是 21（纯白对纯黑），最小值是 1（同色）。
 
 ## 代码阅读题
 
