@@ -46,7 +46,7 @@ function createDailyTodoEngine(initialState, dependencies) {
     const task = findTodayTask(id);
     if (!task) return unavailableTask(id);
     task.completed = !task.completed;
-    task.completedAt = task.completed ? dependencies.now() : null;
+    task.completedAt = task.completed ? completionInstant(task.createdAt, dependencies.now()) : null;
     return success();
   }
 
@@ -306,6 +306,23 @@ function createTask(id, text, createdAt) {
     continuedToDate: null,
     hasBeenContinued: false
   };
+}
+
+/**
+ * 完成时间不能早于创建时间 —— 快照校验里有这一条，引擎就不能造出违反它的状态。
+ *
+ * 正常情况就是"现在"。但"现在"早于创建时间是可以真实发生的：系统时钟往回跳过
+ * （改时区、夏令时回拨、NTP 校正），或者数据本身带来的创建时间就在未来。
+ *
+ * 那时候如果老老实实写"现在"，整份快照就会被 schema 拒绝落盘，用户只是点了一下
+ * 完成，却看到「数据暂时只保存在内存中」—— 而且他做不了任何事。把完成时间压在创建
+ * 时间上：任务是完成了，记一个不会倒退的时刻。
+ */
+function completionInstant(createdAt, now) {
+  const created = parseIsoInstant(createdAt);
+  const current = parseIsoInstant(now);
+  if (!Number.isFinite(created) || !Number.isFinite(current)) return now;
+  return current < created ? createdAt : now;
 }
 
 module.exports = { createDailyTodoEngine };

@@ -30,34 +30,90 @@ function readArgument(name, fallback = null) {
 
 const offset = formatLocalInstant().slice(-6);
 
+/**
+ * 本次进程的"现在"，演示数据里的时刻全部以它为基准。
+ *
+ * 要同时满足两条互相拉扯的要求：
+ *
+ *   - 时刻**不能写死钟点**。凌晨跑验收时"当天 08:00"还在未来，用户点一下完成就会
+ *     撞上「完成时间不能早于创建时间」，整份状态被 schema 拒掉（踩过，见 todayTask）。
+ *   - 同一进程里调两次 `buildDemoState()` 必须**完全一样**。验收准备跑两遍要得到
+ *     同一份数据，否则第二遍会继承上一遍的改动，"每次都从同一个已知状态开始"就没了。
+ *
+ * 把"进程启动那一刻"固定下来当基准，两条都满足。
+ */
+const referenceNow = new Date();
+
+function dateOf(when) {
+  const month = String(when.getMonth() + 1).padStart(2, '0');
+  const day = String(when.getDate()).padStart(2, '0');
+  return `${when.getFullYear()}-${month}-${day}`;
+}
+
 function localDate(daysFromToday) {
   const now = new Date();
-  const shifted = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysFromToday);
-  const month = String(shifted.getMonth() + 1).padStart(2, '0');
-  const day = String(shifted.getDate()).padStart(2, '0');
-  return `${shifted.getFullYear()}-${month}-${day}`;
+  return dateOf(new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysFromToday));
 }
 
 function instant(date, time) {
   return `${date}T${time}${offset}`;
 }
 
+/** 今天某个"进度点"对应的时刻：0 = 今天零点，1 = 基准时刻。 */
+function earlierToday(progress) {
+  const midnight = new Date(referenceNow.getFullYear(), referenceNow.getMonth(), referenceNow.getDate());
+  const when = new Date(midnight.getTime() + (referenceNow.getTime() - midnight.getTime()) * progress);
+  return instant(dateOf(when), clockTime(when));
+}
+
+function clockTime(when) {
+  const pad = (value, width = 2) => String(value).padStart(width, '0');
+  return `${pad(when.getHours())}:${pad(when.getMinutes())}:${pad(when.getSeconds())}.${pad(when.getMilliseconds(), 3)}`;
+}
+
 let sequence = 0;
-function task(text, { completed = false, at = '08:00:00.000' } = {}) {
+
+function makeTask(text, createdAt, completedAt) {
   sequence += 1;
   return {
     id: `demo-${sequence}`,
     text,
-    completed,
-    createdAt: instant(localDate(0), at),
-    // 完成时间固定晚于所有 createdAt，否则状态校验会以「完成时间早于创建时间」拒绝整份数据。
-    completedAt: completed ? instant(localDate(0), '10:30:00.000') : null,
+    completed: completedAt !== null,
+    createdAt,
+    completedAt,
     continuedFromTaskId: null,
     continuedFromDate: null,
     continuedToTaskId: null,
     continuedToDate: null,
     hasBeenContinued: false
   };
+}
+
+/**
+ * 今天的一条演示任务。
+ *
+ * **时刻必须由"现在"推出来，不能写死钟点。** 这里踩过一次：以前 createdAt 固定成
+ * 当天 08:00、completedAt 固定成 10:30，凌晨跑验收时两个时刻都还在未来 —— 用户点一下
+ * 「完成」，写进去的"现在"反而早于创建时间，整份状态被 schema 以「完成时间不能早于
+ * 创建时间」拒掉，界面上弹出「数据暂时只保存在内存中」，而他什么都没做错。
+ *
+ * `progress` 取 0~1，是"从今天零点到现在"的进度，所以生成的时刻既落在今天、又已经过去。
+ */
+function todayTask(text, progress, completedProgress = null) {
+  return makeTask(
+    text,
+    earlierToday(progress),
+    completedProgress === null ? null : earlierToday(completedProgress)
+  );
+}
+
+/** 历史里的一条：日期在过去，钟点写死也永远是过去。 */
+function historyTask(day, text, at, completedAt = null) {
+  return makeTask(
+    text,
+    instant(day, at),
+    completedAt === null ? null : instant(day, completedAt)
+  );
 }
 
 function buildDemoState() {
@@ -73,15 +129,15 @@ function buildDemoState() {
       date: today,
       closedAt: null,
       tasks: [
-        task('今天下午一点半开会'),
-        task('每月八月初八乐乐生日提醒'),
-        task('今天20号了，花呗准时还款提醒'),
-        task('一个季度过去了，该收房租了'),
-        task('每周五上午 10 点开会'),
-        task('月度工作计划4：看完12本专业书籍', { completed: true }),
-        task('每月最后一个工作日开会'),
-        task('工作日本月第一天提交上月工作总结'),
-        task('结婚纪念日提醒')
+        todayTask('今天下午一点半开会', 0.10),
+        todayTask('每月八月初八乐乐生日提醒', 0.18),
+        todayTask('今天20号了，花呗准时还款提醒', 0.26),
+        todayTask('一个季度过去了，该收房租了', 0.34),
+        todayTask('每周五上午 10 点开会', 0.42),
+        todayTask('月度工作计划4：看完12本专业书籍', 0.50, 0.62),
+        todayTask('每月最后一个工作日开会', 0.58),
+        todayTask('工作日本月第一天提交上月工作总结', 0.66),
+        todayTask('结婚纪念日提醒', 0.74)
       ]
     },
     history: [
@@ -89,9 +145,9 @@ function buildDemoState() {
         date: yesterday,
         closedAt: instant(yesterday, '23:59:00.000'),
         tasks: [
-          task('整理上周会议纪要', { completed: true, at: '09:20:00.000' }),
-          task('给客户回邮件'),
-          task('预约体检', { completed: true, at: '07:30:00.000' })
+          historyTask(yesterday, '整理上周会议纪要', '09:20:00.000', '11:05:00.000'),
+          historyTask(yesterday, '给客户回邮件', '10:40:00.000'),
+          historyTask(yesterday, '预约体检', '07:30:00.000', '08:15:00.000')
         ]
       }
     ],
@@ -105,7 +161,7 @@ function buildDemoState() {
   };
 }
 
-module.exports = { buildDemoState, localDate, instant };
+module.exports = { buildDemoState, earlierToday, localDate, instant };
 
 if (require.main !== module) {
   return;

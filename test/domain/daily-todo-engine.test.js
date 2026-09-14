@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createState } = require('../../src/domain/state-schema');
+const { createState, validateState } = require('../../src/domain/state-schema');
 
 let domain = {};
 try {
@@ -249,6 +249,32 @@ test('replaceState validates imports and clears obsolete undo records', () => {
   const beforeInvalid = engine.getSnapshot();
   assert.equal(engine.replaceState({ schemaVersion: 999 }).ok, false);
   assert.deepEqual(engine.getSnapshot(), beforeInvalid);
+});
+
+test('创建时间落在未来时，完成时间被压在创建时间上，而不是让整份快照失效', () => {
+  // 系统时钟往回跳（改时区、夏令时回拨、NTP 校正），或者数据本身就带着未来的创建
+  // 时间时都会走到这里。如果老老实实写"现在"，快照会被 schema 以「完成时间不能早于
+  // 创建时间」拒绝落盘 —— 用户只是点了一下完成，却看到「数据暂时只保存在内存中」。
+  const future = '2026-09-13T23:00:00.000+08:00'; // NOW 是 10:30，比它早
+  const state = createState('2026-09-13');
+  state.activeDay.tasks.push(task('future-1', '时钟不对', false, future));
+  const engine = createEngine(state);
+
+  const result = engine.toggleTask('future-1');
+
+  assert.equal(result.ok, true);
+  assert.equal(result.snapshot.activeDay.tasks[0].completedAt, future);
+  const validation = validateState(result.snapshot);
+  assert.equal(validation.ok, true, validation.ok ? '' : validation.error);
+});
+
+test('正常情况下完成时间仍然是"现在"', () => {
+  // 上面那条不能把常规路径也一起改掉。
+  const engine = createEngine();
+  engine.addTask('正常任务');
+  const result = engine.toggleTask('id-1');
+
+  assert.equal(result.snapshot.activeDay.tasks[0].completedAt, NOW);
 });
 
 function task(id, text, completed, createdAt) {
