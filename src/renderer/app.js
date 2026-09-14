@@ -7,7 +7,11 @@
 
 'use strict';
 
-const CHECK_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 8 3 3 7-7" /></svg>';
+// 对勾的纵向下移半格：原来三点是 (3,8)/(6,11)/(13,4)，纵向跨度 4..11，
+// 中心落在 7.5，而 16x16 的 viewBox 中心是 8 —— 于是对勾在圆圈里偏高。
+// 改成 8.5 之后跨度 4.5..11.5，中心正好 8。test/renderer/icon-geometry.test.js
+// 会从这段路径数据里算几何中心，偏了就红。
+const CHECK_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 8.5 3 3 7-7" /></svg>';
 const DELETE_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 6h10M8 6V4h4v2m2 0-.5 10h-7L6 6m3 3v4m2-4v4" /></svg>';
 const DRAG_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4h4M6 8h4M6 12h4" /></svg>';
 

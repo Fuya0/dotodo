@@ -397,9 +397,9 @@ h1 {
 
 .todo-row {
   display: grid;
-  grid-template-columns: 14px 24px minmax(0, 1fr) 26px;
+  grid-template-columns: 20px 24px minmax(0, 1fr) 26px;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-height: 42px;
   padding-left: 2px;
   border-bottom: 1px solid var(--line);
@@ -431,13 +431,20 @@ h1 {
 .drag-handle {
   display: grid;
   place-items: center;
-  width: 14px;
+  width: 20px;
   height: 24px;
   padding: 0;
   border: 0;
   color: var(--muted);
   background: transparent;
-  opacity: 0;
+  /*
+   * 默认淡显，不是 opacity: 0。
+   *
+   * 原来它藏起来、只在鼠标**已经悬停在行上**时淡入 —— 结果是没人找得到拖拽入口，
+   * 用户会去抓行本身（行不能拖），于是"拖不动"。
+   * 一个必须先把鼠标移上去才显形的控件，等于没有。
+   */
+  opacity: 0.4;
   cursor: grab;
   transition: opacity var(--ease), color var(--ease);
   touch-action: none;

@@ -72,6 +72,38 @@ await expect('Alt+↓ 把第一行下移一位',
   () => rowTexts()[0] === beforeReorder[1] && rowTexts()[1] === beforeReorder[0],
   () => rowTexts().slice(0, 3).join(' | '));
 
+/* ---------- 拖拽手柄要够得着 ---------- */
+
+// 这几条是一次真机验收换来的。手柄原来是 14px 宽（行宽的 4%）而且 opacity: 0，
+// 只在你已经悬停到那一行时才淡入 —— 结果是用户找不到拖拽入口，会去抓行本身
+// （行不能拖），反馈就是"拖不动、拖拽不灵敏"。
+//
+// 为什么原来的测试没抓到：下面的合成拖拽直接往手柄上 dispatch pointerdown，
+// **绕过了命中测试**，所以它验的是"拖拽逻辑对不对"，而不是"人能不能抓到它"。
+const dragProbe = rows()[0].querySelector('.drag-handle');
+const dragProbeStyle = getComputedStyle(dragProbe);
+const dragProbeRect = dragProbe.getBoundingClientRect();
+
+check('拖拽手柄默认就看得见（淡显），不必先把鼠标移上去找它',
+  Number(dragProbeStyle.opacity) > 0,
+  `opacity=${dragProbeStyle.opacity}`);
+check('拖拽手柄的命中区够宽（至少 18px）',
+  dragProbeRect.width >= 18,
+  `宽=${Math.round(dragProbeRect.width)}px，行宽=${Math.round(rows()[0].getBoundingClientRect().width)}px`);
+// 前两条实测能抓住旧状态（内联强制成 opacity:0 / 宽 14px 之后立刻变红）。
+// 第三条抓不到那两条的情况 —— opacity 不影响命中测试 —— 它防的是另一种坏法：
+// 手柄被别的元素盖住、或者尺寸塌成 0。三者的分工写在这里，免得以后有人
+// 以为"命中了就说明看得见"。
+check('拖拽手柄的中心点真的能命中它自己（没有被别的元素盖住）',
+  (() => {
+    const hit = document.elementFromPoint(
+      dragProbeRect.left + dragProbeRect.width / 2,
+      dragProbeRect.top + dragProbeRect.height / 2
+    );
+    return hit !== null && (hit === dragProbe || dragProbe.contains(hit));
+  })(),
+  '手柄中心点上命中的是别的元素');
+
 /* ---------- 指针拖拽 ---------- */
 // 拖拽是本项目里状态最多的一段（pointerdown → move → up，外加 cancel/leave 分支），
 // 按 Alt+↓ 走的是另一条代码路径，不能代替它。
