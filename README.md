@@ -184,6 +184,7 @@ npm run verify:win   # 一次跑完：测试 + 冒烟 + 交互 + 打包 + 体积
 npm run verify:installer  # 真的把安装器装上再卸掉，验安装/卸载（会短暂出现桌面图标）
 npm run dist:win     # Windows NSIS 安装包
 npm run dist:mac     # macOS dmg + zip（必须在 macOS 上执行）
+npm run acceptance   # 准备隔离的验收数据并打印启动命令（不动你真实的清单）
 ```
 
 ## 自动化到什么程度
@@ -191,12 +192,15 @@ npm run dist:mac     # macOS dmg + zip（必须在 macOS 上执行）
 | 层 | 覆盖 | 命令 |
 | --- | --- | --- |
 | 单元 / 集成 | 领域规则、存储与恢复、IPC 校验、投影函数 | `npm test` |
-| 静态约束 | 选择器对得上、渲染层不碰 Node、界面没混进不该有的元素 | `npm test` |
+| 静态约束 | 选择器对得上、渲染层不碰 Node、界面没混进不该有的元素、**文档里的数字与脚本一致** | `npm test` |
 | 冒烟 | 真实 Electron 里 Preload、IPC、DOM 真的连通 | `npm run smoke` |
 | **交互场景** | **在真实渲染进程里点击、按键，断言 DOM 与磁盘结果；含跨日归档、时钟回拨、损坏恢复** | `npm run ui-check` |
 | 打包 | 产物能装、体积分类、asar 内容不含测试与文档、打包版的壳层真的能起来、空闲内存 | `npm run verify:win` |
 | **安装 / 卸载** | **装到临时目录、快捷方式与注册表、装好的副本能启动、卸载收干净、用户数据不被删** | `npm run verify:installer` |
-| 人工 | 托盘、DPI、多显示器、**干净机器上的升级**、手感 | [验收清单](docs/testing/electron-windows-manual-checklist.md) |
+| 人工 | 托盘、DPI、多显示器、**干净机器上的升级**、手感 | [快速验收 12 条](docs/testing/acceptance-quick.md)｜[完整清单 87 项](docs/testing/electron-windows-manual-checklist.md) |
+
+**为什么这样分工**、以及哪些选择在真实使用后被推翻了（背景透明度、调色板、平台提示的位置），
+记在 [`docs/design-notes.md`](docs/design-notes.md)。
 
 ## 平台状态
 
