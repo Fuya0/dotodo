@@ -511,6 +511,12 @@ Partially verified: the script itself runs and reports categories and failures c
 `npm test` and `npm run smoke` hit the agent sandbox's `spawn EPERM` boundary. The user runs the full
 pipeline locally.
 
+Later, with full access granted, the whole pipeline ran green end to end — exit code 0, all six
+steps passing (environment, npm test, smoke, pack, size classification, idle memory). Two real
+failures were fixed along the way: the Electron archive download needs a mirror on a restricted
+network, and the memory step's process guard only looked for `DoTodo` while a development run is
+named `electron`.
+
 - [x] **Step 7: Write lesson 07 and testing exercises**
 
 Teach unit/integration/smoke/manual test boundaries, test doubles, deterministic clocks, temporary directories and reading process memory.
@@ -620,16 +626,22 @@ Blocked on the user: every stage from Task 4 onward produced interface behaviour
 test can confirm. Walk `docs/testing/electron-windows-manual-checklist.md` (11 groups, ~80 items) and
 report any finding before packaging starts. Do not treat this step as done because the tests pass.
 
-- [ ] **Step 2: Build the Windows NSIS installer**
+- [x] **Step 2: Build the Windows NSIS installer**
 
 Run: `npm run dist:win`. Record installer size separately from `win-unpacked` size.
 
-Attempted and blocked on the network, not on configuration. `npm run pack` needed an escalated
-sandbox to get past `spawn EPERM`, then reached `packaging platform=win32 arch=x64 electron=44.3.0`
-before the Electron zip download was aborted (`The server aborted pending request`). The zip cache at
-`%LOCALAPPDATA%\electron\Cache` is empty — `node_modules/electron/dist/` holds the extracted runtime,
-but electron-builder downloads the archive separately. Retry on an unrestricted network, or set
-`ELECTRON_MIRROR`.
+**Done.** `release/DoTodo-Setup-1.0.0-x64.exe` — installer download 106.3 MB, packaged directory
+367.4 MB, `app.asar` 119.7 KB. The first attempt failed on an aborted Electron archive download;
+setting `ELECTRON_MIRROR` and `ELECTRON_BUILDER_BINARIES_MIRROR` to the npmmirror mirrors fixed it and
+is now documented in the README and lesson 09.
+
+Verified as part of this step:
+
+- `app.asar` contains exactly 22 entries — `src/` (18), `assets/` (2 tray bitmaps) and `package.json`.
+  No test, docs, exercises, tools or node_modules entry leaked in.
+- The packaged executable was launched against an isolated data directory and screenshotted; it
+  renders identically to the development build, which proves the asar resource paths (renderer page
+  and tray bitmap) resolve in the shipped form.
 
 - [ ] **Step 3: Install, launch, upgrade and uninstall on Windows**
 

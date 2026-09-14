@@ -74,7 +74,7 @@ npm run dist:win
 装完之后必须验的四件事（清单里都有）：
 
 1. **安装**：开始菜单和桌面出现快捷方式，能启动；
-2. **升级**：装新版本覆盖旧版本，**用户数据必须还在**（`%APPDATA%\DoTodo` 不受影响）；
+2. **升级**：装新版本覆盖旧版本，**用户数据必须还在**（`%APPDATA%\dotodo` 不受影响）；
 3. **开机启动**：如果之前开过，升级后仍然生效（依赖 `appId` 和 `productName` 不变）；
 4. **卸载**：程序被删干净，**用户数据默认保留**（用户可能重装）。
 
@@ -207,9 +207,19 @@ $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
 npm run pack
 ```
 
-**NSIS 相关文件下载失败。** electron-builder 还会下载 `nsis` 和 `nsis-resources`，同样可以设 `ELECTRON_BUILDER_BINARIES_MIRROR`。
+**NSIS 相关文件下载失败。** electron-builder 还会下载 `nsis`、`7zip` 和 `nsis-resources`，
+同样可以设镜像。国内网络下两个都设上（已实测）：
+
+```powershell
+$env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
+$env:ELECTRON_BUILDER_BINARIES_MIRROR = "https://npmmirror.com/mirrors/electron-builder-binaries/"
+```
 
 **杀毒软件锁文件。** 构建过程中 `release/` 被实时扫描占用，会报 `EBUSY`/`EPERM`。把仓库目录加进白名单。
+
+**打包后的应用"启动不了"。** 先看退出码：**0 通常意味着单实例锁被占**——开发版（`npm start`，
+进程名 `electron`）和安装版（进程名 `DoTodo`）共用同一个数据目录，也就共用同一把锁。
+不是崩溃，先把另一个关掉。
 
 ## 运行与验证
 

@@ -11,6 +11,7 @@
     "smoke": "node tools/run-smoke.js",
     "icons": "node tools/make-tray-icon.js",
     "shot": "node tools/capture-window.js",
+    "paths": "electron . --print-paths",
     "verify:win": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/verify-electron.ps1",
     "pack": "electron-builder --dir",
     "dist:win": "electron-builder --win nsis",

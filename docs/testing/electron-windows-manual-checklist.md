@@ -21,9 +21,18 @@ npm start
 数据目录（下面会反复用到）：
 
 ```text
-%APPDATA%\DoTodo\state.json
-%APPDATA%\DoTodo\state.backup.json
+%APPDATA%\dotodo\state.json
+%APPDATA%\dotodo\state.backup.json
 ```
+
+不确定时让应用自己报：
+
+```powershell
+npm run paths
+```
+
+> **装好之后注意**：安装版和 `npm start` 开发版共用同一个数据目录，也共用同一把单实例锁。
+> 两个同时开着，后启动的那个会**静默退出**（退出码 0）。这不是崩溃——先关掉一个。
 
 录屏或截图记录第 1、3、7 项的证据。
 
@@ -90,7 +99,7 @@ npm start
 | --- | --- | --- |
 | 4.1 | 记下今天的任务和完成状态 | — |
 | 4.2 | 关闭应用，把系统日期改到明天，重新打开 | 昨天整天的清单出现在历史页，**未完成项不会被自动搬到今天** |
-| 4.3 | 打开 `%APPDATA%\DoTodo\state.json` | 昨天的日期记录里 `closedAt` 有值，今天是一个新的空 `activeDay` |
+| 4.3 | 打开 `%APPDATA%\dotodo\state.json` | 昨天的日期记录里 `closedAt` 有值，今天是一个新的空 `activeDay` |
 | 4.4 | 不关应用，只把系统日期改到明天，然后在窗口里添加一条任务 | 应用在真正干活前先归档：上一次的清单进了历史，新任务进新的一天 |
 | 4.5 | 把系统日期**调回昨天**，重新打开 | 显示警告「系统日期早于当前清单日期」，历史**不会**被回退重开 |
 | 4.6 | 把日期调回正确值，重启 | 警告消失，数据正常 |
@@ -155,7 +164,7 @@ npm start
 先备份：
 
 ```powershell
-Copy-Item "$env:APPDATA\DoTodo\state.json" "$env:APPDATA\DoTodo\state.json.manual-backup"
+Copy-Item "$env:APPDATA\dotodo\state.json" "$env:APPDATA\dotodo\state.json.manual-backup"
 ```
 
 | # | 操作 | 期望 |
@@ -165,7 +174,7 @@ Copy-Item "$env:APPDATA\DoTodo\state.json" "$env:APPDATA\DoTodo\state.json.manua
 | 9.3 | 导入一个随便写的文本文件 | 提示「导入文件不是有效的 JSON 状态。」；**当前清单完全不变** |
 | 9.4 | 导入一个字段被改坏的 JSON | 提示状态无效；当前清单不变 |
 | 9.5 | 导入刚才导出的文件 | 提示导入完成；导入前的那份状态自动变成了 `state.backup.json` |
-| 9.6 | 点「打开数据目录」 | 资源管理器打开 `%APPDATA%\DoTodo` |
+| 9.6 | 点「打开数据目录」 | 资源管理器打开 `%APPDATA%\dotodo` |
 | 9.7 | 关掉应用，把 `state.json` 内容改成 `{broken`，重新打开 | 弹出警告说明主文件损坏并已保留原文件；清单从备份恢复；目录里出现 `recovery-primary-*.json` |
 | 9.8 | 同样把 `state.backup.json` 也改成坏内容，重新打开 | 警告说明两份都损坏、原文件已保留；应用**停止写入**，不再是"看着能用其实存不下去" |
 | 9.9 | 观察启动警告文字 | 警告里带有**具体的恢复文件绝对路径**，不是只说"文件损坏了" |
@@ -176,7 +185,7 @@ Copy-Item "$env:APPDATA\DoTodo\state.json" "$env:APPDATA\DoTodo\state.json.manua
 
 | # | 操作 | 期望 |
 | --- | --- | --- |
-| 10.1 | 把 `%APPDATA%\DoTodo` 目录设为只读，然后添加任务 | 出现「保存失败：…」和"数据暂时只保存在内存中"的提示；**刚添加的任务仍在界面上** |
+| 10.1 | 把 `%APPDATA%\dotodo` 目录设为只读，然后添加任务 | 出现「保存失败：…」和"数据暂时只保存在内存中"的提示；**刚添加的任务仍在界面上** |
 | 10.2 | 恢复目录权限后继续操作 | 能正常保存，警告消失 |
 | 10.3 | 任务很多（200+ 条）时滚动和勾选 | 不掉帧，滚动条可用，勾选后视口位置不跳 |
 | 10.4 | 连续快速勾选/取消同一项 | 最终状态与最后点击一致，不会因为响应乱序而错乱 |

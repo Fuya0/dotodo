@@ -25,6 +25,7 @@ let windowController = null;
 let shellController = null;
 let ipcRegistration = null;
 const isSmokeTest = process.argv.includes('--smoke-test');
+const printPaths = process.argv.includes('--print-paths');
 const captureTarget = readArgument('--capture=');
 const captureBackdrop = readArgument('--capture-backdrop=');
 const capturePage = readArgument('--capture-page=');
@@ -47,7 +48,9 @@ if (isSmokeTest) {
     app.setPath('userData', isolatedUserData);
   }
 }
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
+// 诊断模式必须在单实例锁之前退出：如果用户已经开着应用，
+// 拿不到锁就什么也打印不出来，而这个模式正是用来回答「数据到底存在哪」的。
+const hasSingleInstanceLock = printPaths ? true : app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   if (isSmokeTest) app.exit(2);
   else app.quit();
@@ -322,7 +325,23 @@ async function initialize() {
   await windowController.load();
 }
 
-if (hasSingleInstanceLock) {
+if (printPaths) {
+  // 用户迟早会问「我的清单存在哪个文件」。与其靠文档里的一句话，不如让应用自己回答。
+  app.whenReady().then(() => {
+    const userData = app.getPath('userData');
+    console.log(JSON.stringify({
+      name: app.getName(),
+      version: app.getVersion(),
+      packaged: app.isPackaged,
+      appData: app.getPath('appData'),
+      userData,
+      stateFile: path.join(userData, 'state.json'),
+      backupFile: path.join(userData, 'state.backup.json'),
+      executable: app.getPath('exe')
+    }, null, 2));
+    app.exit(0);
+  });
+} else if (hasSingleInstanceLock) {
   app.whenReady().then(initialize).catch((error) => {
     console.error('[DoTodo startup]', error);
     app.exit(1);

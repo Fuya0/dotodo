@@ -110,6 +110,9 @@ if (require.main !== module) {
 const outputPath = path.resolve(readArgument('out', path.join(projectDirectory, 'shots', 'today.png')));
 const backdrop = readArgument('backdrop', '#2f6fd0');
 const page = readArgument('page', 'today');
+// 默认跑源码（electron .）；传 --executable 可以截打包后的真实产物，
+// 用来验证 asar 里的资源路径（托盘图标、renderer 页面）在分发形态下依然能解析。
+const executable = readArgument('executable', null);
 const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'dotodo-shot-'));
 
 // 演示数据必须先过状态校验。否则应用会把整份状态当成"损坏"移到 recovery，
@@ -132,9 +135,10 @@ let sawCapture = false;
 let settled = false;
 
 const child = spawn(
-  electronPath,
+  executable || electronPath,
   [
-    '.',
+    // 打包后的可执行文件不需要（也不接受）项目目录参数，它自己就是应用。
+    ...(executable ? [] : ['.']),
     '--smoke-test',
     `--capture=${outputPath}`,
     `--capture-backdrop=${backdrop}`,

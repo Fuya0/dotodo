@@ -188,19 +188,30 @@ if (-not $SkipMemory) {
       throw "找不到 $executable（去掉 -SkipMemory，或先完成打包）"
     }
 
-    $running = @(Get-Process -Name 'DoTodo' -ErrorAction SilentlyContinue)
+    # 开发版（npm start）跑起来进程名是 electron，安装版是 DoTodo。
+    # 两者共用同一个数据目录，也就共用同一把单实例锁：任何一种在跑，
+    # 新起的打包版都会立刻以退出码 0 结束。所以必须一起检测，
+    # 否则这里会把「被锁挡住」误报成「进程没起来」。
+    $running = @(
+      Get-Process -Name 'DoTodo', 'electron' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -like "$repoRoot*" }
+    )
     if ($running.Count -gt 0) {
-      Write-Host '检测到 DoTodo 已在运行，跳过内存测量：' -ForegroundColor Yellow
-      Write-Host '  一是单实例锁会让新进程立刻退出，二是收尾时不该动你正在用的窗口。'
+      Write-Host "检测到 $($running.Count) 个 DoTodo 进程正在运行，跳过内存测量：" -ForegroundColor Yellow
+      Write-Host '  开发版与安装版共用数据目录和单实例锁，新进程会立刻退出。'
+      Write-Host '  收尾时也不该动你正在用的窗口。要测就先全部关掉。'
       return
     }
 
     Write-Host '启动打包后的应用（会使用真实用户数据目录）……'
-    Start-Process -FilePath $executable | Out-Null
+    $started = Start-Process -FilePath $executable -PassThru
     try {
       Start-Sleep -Seconds 8
       $tree = @(Get-Process -Name 'DoTodo' -ErrorAction SilentlyContinue)
-      if ($tree.Count -eq 0) { throw 'DoTodo 进程没有起来。' }
+      if ($tree.Count -eq 0) {
+        $code = if ($started.HasExited) { $started.ExitCode } else { '未知' }
+        throw "打包后的应用没有起来（退出码 $code）。退出码 0 通常意味着单实例锁已被占用。"
+      }
       $workingSet = ($tree | Measure-Object -Property WorkingSet64 -Sum).Sum
       $privateBytes = ($tree | Measure-Object -Property PrivateMemorySize64 -Sum).Sum
       Write-Host ("进程数        : {0}" -f $tree.Count)

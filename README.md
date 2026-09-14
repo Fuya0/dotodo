@@ -32,12 +32,29 @@ npm run dist:win      # 生成 release/DoTodo-Setup-<版本>-x64.exe
 
 安装程序未签名，Windows 会提示"未知发布者"，选择"仍要运行"即可。
 
+**如果打包时卡在下载或报 `The server aborted pending request`**：electron-builder 要从 GitHub 拉
+Electron 二进制和 NSIS，国内网络经常中断。设置镜像即可（实测有效）：
+
+```powershell
+$env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
+$env:ELECTRON_BUILDER_BINARIES_MIRROR = "https://npmmirror.com/mirrors/electron-builder-binaries/"
+npm run dist:win
+```
+
 ### 数据在哪
 
 | 平台 | 路径 |
 | --- | --- |
-| Windows | `%APPDATA%\DoTodo\state.json` |
-| macOS | `~/Library/Application Support/DoTodo/state.json` |
+| Windows | `%APPDATA%\dotodo\state.json` |
+| macOS | `~/Library/Application Support/dotodo/state.json` |
+
+> 目录名是小写的 `dotodo`，因为 Electron 用 `package.json` 的 `name` 决定它
+> （顶层没有 `productName`）。**不要**为了好看去改这个名字：那会把数据目录挪走，
+> 老用户的清单看起来就像丢了。想知道确切路径，让应用自己回答：
+>
+> ```powershell
+> npm run paths
+> ```
 
 同目录下还有：
 

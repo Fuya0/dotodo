@@ -265,7 +265,7 @@ if ($running.Count -gt 0) {
 清单里也标出了要留证据的项（截图/录屏）和顺序上的依赖（第 9 节必须先备份真实数据）：
 
 ```powershell
-Copy-Item "$env:APPDATA\DoTodo\state.json" "$env:APPDATA\DoTodo\state.json.manual-backup"
+Copy-Item "$env:APPDATA\dotodo\state.json" "$env:APPDATA\dotodo\state.json.manual-backup"
 ```
 
 ## 运行与验证
@@ -287,11 +287,55 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/verify-electron.ps1 -S
 code docs/testing/electron-windows-manual-checklist.md
 ```
 
-**注意**：本课结束时验证脚本**只跑通了能自动化的那一半**。「环境信息」「打包产物体积分类」「验证汇总」三步已端到端实测（上面的数字就是实测输出），失败时也确实以退出码 1 结束并打印失败步骤名。但「单元测试」和「冒烟测试」两步需要在能真正启动 Electron 的环境里执行，开发沙箱不允许子进程管道通信，所以它们在本机首次执行时才算真正验证。
+**注意**：这条流水线现在**已经完整跑通过**（退出码 0），六个步骤全绿：
 
-脚本自身的纯逻辑（字节格式化、体积分类、步骤汇总）在 `exercises/electron/07-testing/` 里有对应练习；先自己写一遍这些判断，再回头读脚本会顺很多。
+```text
+环境信息                 passed
+单元与集成测试 (npm test)   passed
+冒烟测试 (npm run smoke) passed
+打包到目录 (npm run pack) passed
+打包产物体积分类             passed
+打包应用空闲内存             passed
+```
 
-另外一条环境经验：这台机器上只有 Windows PowerShell 5.1，没有 `pwsh`。所以脚本用 `#Requires -Version 5.1` 并按 5.1 的语法写，`npm run verify:win` 调用的也是 `powershell`。**含中文的 `.ps1` 文件必须存成带 BOM 的 UTF-8**——5.1 会把没有 BOM 的脚本按系统 ANSI 代码页（中文 Windows 上是 GBK）读取，结果就是满屏乱码和莫名的语法错误。
+上面那张体积分类表就是实测输出（`app.asar` 约 119 KB）。
+
+两次真实的失败值得记下来，因为它们都不是"代码写错了"，而是环境问题：
+
+**① 从 GitHub 下载 Electron 二进制会中断。**
+
+```text
+⨯ The server aborted pending request  failedTask=build
+```
+
+`node_modules/electron/dist/` 里已经有解压好的运行时，但 electron-builder 需要的是 **zip 原件**，
+所以它会另外下载一次到 `%LOCALAPPDATA%\electron\Cache`。国内网络下设置镜像即可（实测有效）：
+
+```powershell
+$env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
+$env:ELECTRON_BUILDER_BINARIES_MIRROR = "https://npmmirror.com/mirrors/electron-builder-binaries/"
+```
+
+**②「打包后的应用没起来」不一定是应用的问题。**
+
+内存测量那一步第一次跑是**失败**的，报「DoTodo 进程没有起来」。查下去才发现：开发版
+（`npm start`）的进程名叫 `electron`，安装版叫 `DoTodo`，而两者**共用同一个数据目录、也就共用
+同一把单实例锁**。只要有任何一个在跑，新起的打包版就会以**退出码 0 静默退出**——不是崩溃。
+
+原来的检测只找 `DoTodo`，于是既漏判了「有实例在跑」，又把退出码 0 误报成故障。修好之后它
+会明确说「检测到 4 个 DoTodo 进程正在运行，跳过内存测量」。
+
+这条经验可以推广：**退出码 0 加上"什么都没发生"，优先怀疑单实例锁，而不是怀疑代码。**
+
+### 顺带一说：这个 `.ps1` 必须带 BOM
+
+`tools/verify-electron.ps1` 里有大量中文，而 Windows PowerShell 5.1 会用系统 ANSI 代码页
+（中文 Windows 上是 GBK）读取**没有 BOM** 的脚本。BOM 一丢，整个文件变成乱码加一串莫名其妙的
+语法错误——而且报错位置全在无关的行上，极难定位。
+
+很多编辑器（包括本仓库开发过程中用到的文件写入工具）会顺手把 BOM 剥掉，所以
+`test/tools/verify-script.test.js` 专门断言了前三个字节必须是 `EF BB BF`。
+**能自动发现的坑就不要靠记性。**
 
 ## 常见错误
 

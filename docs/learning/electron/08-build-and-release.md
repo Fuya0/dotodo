@@ -105,7 +105,7 @@ npx asar list release/win-unpacked/resources/app.asar
 ```
 
 - `appId` 是系统识别应用的标识，**发布后不要改**（改了会被当成另一个应用，用户的"开机启动"等系统级设置会失效）；
-- `productName` 决定 `%APPDATA%` 下的目录名，也就是用户数据的位置。**这个也不能随便改**；
+- `productName` 决定安装器、快捷方式和可执行文件的名字。**注意它不影响用户数据目录**——数据目录由 `package.json` 顶层的 `name` 决定（顶层没有 `productName` 时 Electron 就用 `name`）。DoTodo 顶层没有 `productName`，所以数据落在 `%APPDATA%\dotodo`，而程序叫 `DoTodo.exe`。这个"不一致"是**故意保留**的：加一个顶层 `productName` 就会把数据目录挪到 `%APPDATA%\DoTodo`，老用户的清单看起来就像丢了；
 - `directories.buildResources: build` 里的东西（图标）只用于构建过程，不会进 `app.asar`——这就是为什么图标放 `build/`，而**运行时**要读的托盘 PNG 放 `assets/`；
 - `nsis.oneClick: false` + `allowToChangeInstallationDirectory: true` → 安装时让用户选目录。默认的 `oneClick: true` 是"点一下直接装完"，不适合需要选安装位置的用户。
 
@@ -143,7 +143,7 @@ dist/
 `feature/windows-v1` 那条 WPF 路线已经确定不走，但它的分支里有 8 个提交、一套完整的领域模型和一个测试视图模型。删掉是不可逆的。计划里把这一步明确留到「Electron 通过自动测试**和**用户验收之后」，而且「分支是否永久删除」还要单独确认一次。
 
 **② 不删用户的运行数据。**
-`%APPDATA%\DoTodo` 是用户真实的清单。任何"清理"都不能碰它。冒烟测试的隔离目录（第 7 课）就是为了保证这一点。
+`%APPDATA%\dotodo` 是用户真实的清单。任何"清理"都不能碰它。冒烟测试的隔离目录（第 7 课）就是为了保证这一点。
 
 **③ 不把「没验证过」写成「已完成」。**
 第 7 课的验证脚本在本机只跑通了能自动化的部分；第 9 课的 macOS 产物在 Windows 上做不出来。这些都要如实写进文档，而不是在 README 里写一句"支持 Windows 和 macOS"。
