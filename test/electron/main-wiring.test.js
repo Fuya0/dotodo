@@ -70,3 +70,33 @@ test('冒烟模式会汇报壳层启动结果', () => {
   // tools/ui-check.js 靠这一行断言托盘在真实 Electron 里建起来了。
   assert.match(main, /DOTODO_SHELL_BOOT/);
 });
+
+test('测试入口下一律不挂桌面层', () => {
+  // 冒烟和交互场景会开出真窗口逐个断言。窗口一挂进桌面就脱离了顶层窗口列表，
+  // tools/ui-check.js 那几百条断言会全部扑空 —— 而且失败信息完全指不到这里，
+  // 只会看起来像"窗口根本没建出来"。
+  const composition = main.match(/const desktopLayer = [\s\S]*?:\s*createDesktopLayer\(\);/);
+  assert.ok(composition, "找不到桌面层的组装（应该是一个 `const desktopLayer = ...` 的择一表达式）。");
+  assert.match(composition[0], /isSmokeTest \|\| driveScript/, '必须由两个测试标记关掉');
+  assert.match(composition[0], /createDesktopLayer\(\{ native: null \}\)/, '关掉时给一个空实现，而不是留 null');
+});
+
+test('窗口控制器拿到桌面层，并且挂载结果会留下日志', () => {
+  const createWindow = main.match(/function createAppWindow\(\)[\s\S]*?\n\}/);
+  assert.ok(createWindow, '找不到 createAppWindow。');
+  assert.match(createWindow[0], /^\s+desktopLayer,$/m, '窗口控制器需要拿到桌面层');
+  // 挂不上是正常降级，但「为什么没贴上」必须能从日志回答，否则是彻底静默的。
+  assert.match(createWindow[0], /onDesktopAttachment: \(outcome\) => \{/);
+});
+
+test('IPC 拿到桌面适配器，且它只做补焦点这一件事', () => {
+  assert.match(main, /desktop: createDesktopAdapter\(\)/);
+  assert.match(main, /focus: \(\) => windowController\.focusDesktop\(\)/);
+});
+
+test('渲染进程点窗口时会请求补焦点', () => {
+  const app = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'renderer', 'app.js'), 'utf8');
+  // 挂进桌面之后点它不会有键盘；这一下请求就是唯一的补救入口。
+  assert.match(app, /document\.addEventListener\('mousedown',[\s\S]*?\}, true\);/);
+  assert.match(app, /window\.dotodo\.requestDesktopFocus\(\)/);
+});

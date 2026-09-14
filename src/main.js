@@ -18,6 +18,7 @@ const { registerIpc } = require('./electron/ipc');
 const { formatLocalInstant } = require('./electron/local-time');
 const { createShellController } = require('./electron/shell-controller');
 const { createWindowController } = require('./electron/window-controller');
+const { createDesktopLayer } = require('./electron/desktop-layer');
 
 /** 主进程主动推快照用的频道。它不走 invoke/handle，所以不在 ipc.js 的 CHANNELS 表里。 */
 const SNAPSHOT_CHANNEL = 'state:changed';
@@ -35,6 +36,14 @@ const capturePage = readArgument('--capture-page=');
 // 在渲染进程里执行一段脚本，把它返回的结果打到标准输出。
 // 这是 test/ui/ 里那些交互场景的入口：它们真的去点、去按键，然后断言 DOM。
 const driveScript = readArgument('--drive=');
+
+// 桌面层：把窗口挂进 Windows 桌面，让它成为桌面的一部分，而不是一块浮在桌面之上的窗口。
+//
+// 冒烟和交互场景（`--smoke-test` / `--drive=`）会开出真窗口逐个断言，窗口一旦挂进
+// 桌面就脱离了顶层窗口列表，那些断言全都会扑空 —— 所以测试入口下一律不挂。
+const desktopLayer = isSmokeTest || driveScript
+  ? createDesktopLayer({ native: null })
+  : createDesktopLayer();
 const trayIconPath = path.join(__dirname, '..', 'assets', 'tray.png');
 const runtimeWarnings = [];
 let hasUnsavedChanges = false;
@@ -166,7 +175,14 @@ function createAppWindow() {
     BrowserWindow,
     preloadPath: path.join(__dirname, 'preload.js'),
     htmlPath: path.join(__dirname, 'renderer', 'index.html'),
-    bounds: snapshot.windowBounds,    onBoundsChanged: persistBounds,
+    bounds: snapshot.windowBounds,
+    onBoundsChanged: persistBounds,
+    desktopLayer,
+    onDesktopAttachment: (outcome) => {
+      // 挂不上是正常的降级，不是错误；但「为什么没贴上」必须能从日志回答，
+      // 否则这个功能坏掉时是彻底静默的。
+      if (!outcome.attached) console.info(`[DoTodo desktop] 没挂到桌面上：${outcome.reason}`);
+    },
     onError: (error) => console.error('[DoTodo window]', error)
   });
 
@@ -270,7 +286,8 @@ function createDialogs() {
 
 function createShellAdapter() {
   return Object.freeze({
-    openPath: (directory) => electronShell.openPath(directory),    setLaunchAtLogin(enabled) {
+    openPath: (directory) => electronShell.openPath(directory),
+    setLaunchAtLogin(enabled) {
       const result = shellController.setLaunchAtLogin(enabled);
       if (!result.ok) throw new Error(result.error);
       return result;
@@ -279,6 +296,18 @@ function createShellAdapter() {
     close: () => windowController.close(),
     // 设置写盘之后才让托盘菜单读新值，否则菜单会显示成旧状态。
     syncSettings: () => shellController.refreshMenu()
+  });
+}
+
+/**
+ * 渲染进程点窗口那一下要走的路径。
+ *
+ * 窗口挂进桌面之后，它的顶层祖先变成了桌面本身，而桌面永远不会被激活 —— 键盘
+ * 不会自己落上来，只能由主进程在点击时手动补一次焦点。普通窗口上是空操作。
+ */
+function createDesktopAdapter() {
+  return Object.freeze({
+    focus: () => windowController.focusDesktop()
   });
 }
 
@@ -411,6 +440,7 @@ async function initialize() {
       markSaved,
       markDirty: markSaveFailure
     },
+    desktop: createDesktopAdapter(),
     prepareState: prepareCurrentDay
   });
   await windowController.load();

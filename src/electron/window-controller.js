@@ -4,6 +4,8 @@ function createWindowController({
   htmlPath,
   bounds,
   onBoundsChanged,
+  desktopLayer = null,
+  onDesktopAttachment = () => {},
   onError = () => {},
   schedule = setTimeout,
   cancelSchedule = clearTimeout
@@ -43,12 +45,33 @@ function createWindowController({
 
   let boundsTimer = null;
   let boundsRevision = 0;
+  let desktopAttachment = null;
 
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
   window.once('ready-to-show', () => {
-    if (!window.isDestroyed()) window.show();
+    if (window.isDestroyed()) return;
+    // 挂到桌面上要在**第一次显示之前**。先以普通窗口的样子闪一下再贴过去，
+    // 那一下跳变比什么都显眼；`ready-to-show` 正好是"画好了但还没显示"。
+    attachToDesktop();
+    window.show();
   });
+
+  /**
+   * 让窗口成为桌面的一部分。
+   *
+   * 挂不上（不是 Windows、没有 koffi、桌面宿主找不到）就照常当普通窗口用 ——
+   * 这是加分项，不该让应用起不来，也不该让用户看到任何异常。
+   */
+  function attachToDesktop() {
+    if (!desktopLayer) return;
+    desktopAttachment = desktopLayer.attach(desktopLayer.hwndOf(window));
+    try {
+      onDesktopAttachment(desktopAttachment);
+    } catch (error) {
+      onError(error);
+    }
+  }
 
   function saveBoundsSoon() {
     boundsRevision += 1;
@@ -69,6 +92,19 @@ function createWindowController({
   window.on('resize', saveBoundsSoon);
   return Object.freeze({
     getWindow: () => window,
+    /** 挂载结果，用来回答「为什么没有贴到桌面上」。 */
+    getDesktopAttachment: () => desktopAttachment,
+    /**
+     * 把键盘焦点抢到挂进桌面的窗口上。
+     *
+     * 窗口一旦挂进桌面，它的顶层祖先就变成了桌面本身，而键盘只发给"顶层窗口处于
+     * 激活状态"的那个窗口 —— 桌面永远不会被激活，所以不补这一下，点它的时候
+     * 键盘是死的。普通窗口上这是个空操作：系统自己会给焦点。
+     */
+    focusDesktop() {
+      if (!desktopLayer || window.isDestroyed()) return false;
+      return desktopLayer.focus(desktopLayer.hwndOf(window));
+    },
     load() {
       return Promise.resolve(window.loadFile(htmlPath)).catch((error) => {
         onError(error);

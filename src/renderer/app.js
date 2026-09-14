@@ -526,6 +526,17 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
+/**
+ * 窗口挂进桌面之后，键盘不会自己落到它身上：它的顶层祖先变成了桌面本身，而桌面
+ * 永远不会被激活。点的这一下通知主进程把焦点补回来。
+ *
+ * 用捕获阶段 —— 列表项和按钮上的处理不该把这一下吃掉。
+ */
+document.addEventListener('mousedown', () => {
+  // 失败也无所谓：窗口没挂进桌面时，这本来就是空操作。
+  window.dotodo.requestDesktopFocus().catch(() => {});
+}, true);
+
 /* ---------- 设置：原生开关 ---------- */
 
 dom.closeToTrayToggle.addEventListener('change', (event) => {

@@ -40,11 +40,16 @@
       "assets/**/*",
       "package.json"
     ],
+    "asarUnpack": [
+      "node_modules/koffi/**"
+    ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "artifactName": "DoTodo-Setup-${version}-${arch}.${ext}"
@@ -60,16 +65,25 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "category": "public.app-category.productivity",
       "artifactName": "DoTodo-${version}-${arch}.${ext}",
       "identity": null
     }
+  },
+  "dependencies": {
+    "koffi": "^3.2.1"
   }
 }

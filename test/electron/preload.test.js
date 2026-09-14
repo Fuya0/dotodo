@@ -53,6 +53,7 @@ test('preload exposes a frozen purpose-specific surface', () => {
     'onSnapshot',
     'openDataFolder',
     'reorderTask',
+    'requestDesktopFocus',
     'setCloseToTray',
     'setLaunchAtLogin',
     'toggleTask',
@@ -83,6 +84,7 @@ test('preload maps arguments onto fixed IPC channels', async () => {
   await api.openDataFolder();
   await api.minimizeWindow();
   await api.closeWindow();
+  await api.requestDesktopFocus();
 
   assert.deepEqual(calls, [
     ['state:get-snapshot'],
@@ -101,7 +103,8 @@ test('preload maps arguments onto fixed IPC channels', async () => {
     ['data:export'],
     ['data:open-folder'],
     ['window:minimize'],
-    ['window:close']
+    ['window:close'],
+    ['window:request-desktop-focus']
   ]);
 });
 

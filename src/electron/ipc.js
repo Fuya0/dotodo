@@ -10,17 +10,19 @@ const CHANNELS = Object.freeze({
   deleteTodayTask: 'task:delete-today',
   deleteHistoryTask: 'history:delete-task',
   continueTask: 'history:continue-task',
-  undo: 'undo:apply',  setCloseToTray: 'settings:set-close-to-tray',
+  undo: 'undo:apply',
+  setCloseToTray: 'settings:set-close-to-tray',
   setLaunchAtLogin: 'settings:set-launch-at-login',
   importData: 'data:import',
   exportData: 'data:export',
   openDataFolder: 'data:open-folder',
   minimizeWindow: 'window:minimize',
-  closeWindow: 'window:close'
+  closeWindow: 'window:close',
+  requestDesktopFocus: 'window:request-desktop-focus'
 });
 
-function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareState }) {
-  assertDependencies(ipcMain, engine, store, dialogs, shell, status, prepareState);
+function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareState, desktop }) {
+  assertDependencies(ipcMain, engine, store, dialogs, shell, status, prepareState, desktop);
   const registeredChannels = [];
 
   function handle(channel, handler) {
@@ -63,7 +65,7 @@ function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareSt
   }
 
   handleState(CHANNELS.getSnapshot, () => engine.getSnapshot());
-  handle(CHANNELS.getStatus, () => status.getStatus());
+  handleState(CHANNELS.getStatus, () => status.getStatus());
 
   handleState(CHANNELS.addTask, (_event, text) => {
     if (!isTaskText(text)) return invalidInput('任务内容必须是 1 到 240 个字符的文本。');
@@ -116,7 +118,9 @@ function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareSt
     if (result.ok !== true) return result;
     if (typeof shell.syncSettings === 'function') shell.syncSettings(result.snapshot.settings);
     return result;
-  }  handleState(CHANNELS.setCloseToTray, (_event, value) => {
+  }
+
+  handleState(CHANNELS.setCloseToTray, (_event, value) => {
     if (typeof value !== 'boolean') return invalidInput('关闭到托盘设置必须是布尔值。');
     return afterNativeChange(runCommand(() => engine.updateSettings({ closeToTray: value })));
   });
@@ -143,7 +147,7 @@ function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareSt
       : replacement;
   });
 
-  handleState(CHANNELS.exportData, async () => {
+  handle(CHANNELS.exportData, async () => {
     const destinationPath = await dialogs.chooseExportPath();
     if (!destinationPath) return { ok: false, cancelled: true };
     store.exportTo(destinationPath, engine.getSnapshot());
@@ -167,6 +171,18 @@ function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareSt
     return { ok: true };
   });
 
+  /**
+   * 窗口挂进桌面之后，键盘不会再自己落到它身上：它的顶层祖先变成了桌面本身，
+   * 而桌面永远不会被激活。所以点的这一下要主动把焦点补回去，输入框才收得到字。
+   *
+   * 没挂进桌面（普通窗口）时这是个空操作，返回 `focused: false` 而已 ——
+   * 渲染进程不需要因此改变任何行为。
+   */
+  handle(CHANNELS.requestDesktopFocus, () => {
+    const focused = desktop.focus();
+    return { ok: true, focused };
+  });
+
   return Object.freeze({
     dispose() {
       for (const channel of registeredChannels) ipcMain.removeHandler(channel);
@@ -175,13 +191,14 @@ function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareSt
   });
 }
 
-function assertDependencies(ipcMain, engine, store, dialogs, shell, status, prepareState) {
+function assertDependencies(ipcMain, engine, store, dialogs, shell, status, prepareState, desktop) {
   if (!ipcMain || typeof ipcMain.handle !== 'function' || typeof ipcMain.removeHandler !== 'function' ||
       !engine || typeof engine.getSnapshot !== 'function' ||
       !store || typeof store.save !== 'function' ||
       !dialogs || typeof dialogs.chooseImportPath !== 'function' ||
       !shell || typeof shell.close !== 'function' ||
       !status || typeof status.getStatus !== 'function' ||
+      !desktop || typeof desktop.focus !== 'function' ||
       typeof prepareState !== 'function') {
     throw new TypeError('IPC 注册需要完整且受限的主进程适配器。');
   }

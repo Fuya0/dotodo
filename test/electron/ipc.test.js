@@ -16,7 +16,8 @@ const EXPECTED_CHANNELS = [
   'history:continue-task',
   'history:delete-task',
   'settings:set-close-to-tray',
-  'settings:set-launch-at-login',  'state:get-snapshot',
+  'settings:set-launch-at-login',
+  'state:get-snapshot',
   'task:add',
   'task:delete-today',
   'task:edit',
@@ -24,7 +25,8 @@ const EXPECTED_CHANNELS = [
   'task:toggle',
   'undo:apply',
   'window:close',
-  'window:minimize'
+  'window:minimize',
+  'window:request-desktop-focus'
 ];
 
 function createRecordingIpcMain() {
@@ -82,6 +84,9 @@ function createHarness(overrides = {}) {
   const status = {
     getStatus: () => ({ warnings: [], dirty: false })
   };
+  const desktop = {
+    focus: (...args) => (calls.push(['focus', ...args]), true)
+  };
   const dependencies = {
     ipcMain,
     engine: { ...engine, ...overrides.engine },
@@ -89,6 +94,7 @@ function createHarness(overrides = {}) {
     dialogs: { ...dialogs, ...overrides.dialogs },
     shell: { ...shell, ...overrides.shell },
     status: { ...status, ...overrides.status },
+    desktop: { ...desktop, ...overrides.desktop },
     prepareState: overrides.prepareState || (() => ({ ok: true }))
   };
   return { calls, commandResult, dependencies, ipcMain, snapshot };
@@ -190,14 +196,18 @@ test('engine rejections are not marked as applied', async () => {
 
 test('settings reject coerced values and coordinate native effects', async () => {
   const harness = createHarness();
-  register(harness);  assert.equal((await invoke(harness, 'settings:set-close-to-tray', 1)).ok, false);
+  register(harness);
+  assert.equal((await invoke(harness, 'settings:set-close-to-tray', 1)).ok, false);
   assert.equal((await invoke(harness, 'settings:set-launch-at-login', 'yes')).ok, false);
-  assert.deepEqual(harness.calls, []);  await invoke(harness, 'settings:set-close-to-tray', false);
+  assert.deepEqual(harness.calls, []);
+  await invoke(harness, 'settings:set-close-to-tray', false);
   await invoke(harness, 'settings:set-launch-at-login', true);
 
-  assert.deepEqual(harness.calls.filter(([name]) => name === 'updateSettings'), [    ['updateSettings', { closeToTray: false }],
+  assert.deepEqual(harness.calls.filter(([name]) => name === 'updateSettings'), [
+    ['updateSettings', { closeToTray: false }],
     ['updateSettings', { launchAtLogin: true }]
-  ]);  assert.equal(harness.calls.some(([name, value]) => name === 'setLaunchAtLogin' && value === true), true);
+  ]);
+  assert.equal(harness.calls.some(([name, value]) => name === 'setLaunchAtLogin' && value === true), true);
 });
 
 test('native setting failures return the authoritative snapshot without mutating settings', async () => {
@@ -410,4 +420,20 @@ test('import surfaces the preserved corrupt-file paths through the runtime statu
   register(harness);
 
   assert.deepEqual(await invoke(harness, 'app:get-status'), { warnings, dirty: false });
+});
+
+test('点窗口这一下只做一件事：把键盘焦点补回去', async () => {
+  const harness = createHarness();
+  register(harness);
+
+  assert.deepEqual(await invoke(harness, 'window:request-desktop-focus'), { ok: true, focused: true });
+  assert.deepEqual(harness.calls, [['focus']]);
+});
+
+test('补焦点失败也只是如实报告，不打扰用户', async () => {
+  const harness = createHarness({ desktop: { focus: () => false } });
+  register(harness);
+
+  // 没挂进桌面、或者系统不给焦点，都不该变成一条报错弹窗。
+  assert.deepEqual(await invoke(harness, 'window:request-desktop-focus'), { ok: true, focused: false });
 });
