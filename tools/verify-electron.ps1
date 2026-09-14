@@ -216,12 +216,21 @@ if (-not $SkipMemory) {
     # 两者共用同一个数据目录，也就共用同一把单实例锁：任何一种在跑，
     # 新起的打包版都会立刻以退出码 0 结束。所以必须一起检测，
     # 否则这里会把「被锁挡住」误报成「进程没起来」。
+    #
+    # 注意这里刻意不按「进程路径在 $repoRoot 下」过滤：锁是按数据目录
+    # （%APPDATA%\dotodo）算的，跟可执行文件放在哪个目录无关。当验证在
+    # 克隆出来的第二份仓库里运行时，从原仓库 npm start 起来的实例路径
+    # 并不在 $repoRoot 下，按路径过滤就会看不见它，于是又误报一次。
+    # 判断依据改成「这个名字/这个路径属于 DoTodo」：安装版直接看进程名，
+    # 开发版看可执行文件路径里有没有 dotodo（原仓库、克隆仓库都命中），
+    # 同时不会牵扯到机器上别的 Electron 应用。
     $running = @(
       Get-Process -Name 'DoTodo', 'electron' -ErrorAction SilentlyContinue |
-        Where-Object { $_.Path -like "$repoRoot*" }
+        Where-Object { $_.ProcessName -eq 'DoTodo' -or $_.Path -like '*dotodo*' }
     )
     if ($running.Count -gt 0) {
       Write-Host "检测到 $($running.Count) 个 DoTodo 进程正在运行，跳过内存测量：" -ForegroundColor Yellow
+      Write-Host "  $($running[0].ProcessName)（$($running[0].Path)）"
       Write-Host '  开发版与安装版共用数据目录和单实例锁，新进程会立刻退出。'
       Write-Host '  收尾时也不该动你正在用的窗口。要测就先全部关掉。'
       return
@@ -243,7 +252,11 @@ if (-not $SkipMemory) {
       Write-Host ("私有内存合计  : {0}" -f (Format-Bytes $privateBytes))
       Write-Host '参考：Chromium 多进程模型下，一个进程 60–120 MB 属于正常范围。'
     } finally {
-      Get-Process -Name 'DoTodo' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+      # 只收自己拉起来的那个进程。之前这里是「把所有 DoTodo 进程都杀掉」，
+      # 那等于替用户关掉他正开着的应用——脚本没这个权力。
+      if ($started -and -not $started.HasExited) {
+        Stop-Process -Id $started.Id -Force -ErrorAction SilentlyContinue
+      }
     }
   }
 }

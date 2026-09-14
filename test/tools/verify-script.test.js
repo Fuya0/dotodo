@@ -35,3 +35,30 @@ test('verify-electron.ps1 同时检测开发版与安装版进程', () => {
   // 只检测其中一个，就会把「被锁挡住」误报成「进程没起来」。
   assert.match(text, /Get-Process -Name 'DoTodo', 'electron'/);
 });
+
+test('内存测量检测进程时不按仓库路径过滤', () => {
+  // 曾经这里是 Where-Object { $_.Path -like "$repoRoot*" }。
+  // 锁是按数据目录算的，跟可执行文件在哪个目录无关：在克隆出来的第二份
+  // 仓库里跑验证时，原仓库 npm start 起来的实例路径不在 $repoRoot 下，
+  // 于是检测不到、打包版被锁挡住、报成「没有起来」。
+  assert.doesNotMatch(
+    text,
+    /\$_\.Path -like "\$repoRoot\*"/,
+    '按仓库路径过滤会漏掉从另一份 checkout 启动的实例。'
+  );
+  assert.match(text, /\$_\.ProcessName -eq 'DoTodo' -or \$_\.[Pp]ath -like '\*dotodo\*'/);
+});
+
+test('内存测量只收自己启动的进程', () => {
+  // 收尾时把机器上所有 DoTodo 进程都杀掉，等于替用户关掉他正开着的窗口。
+  const sweepLines = text
+    .split(/\r?\n/)
+    .map((line, index) => ({ line, number: index + 1 }))
+    .filter((entry) => entry.line.includes('Get-Process') && entry.line.includes('Stop-Process'));
+  assert.deepEqual(
+    sweepLines.map((entry) => entry.number),
+    [],
+    '不要用管道把 Get-Process 的结果整批 Stop-Process。'
+  );
+  assert.match(text, /Stop-Process -Id \$started\.Id/);
+});
