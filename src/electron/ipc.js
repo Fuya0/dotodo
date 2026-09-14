@@ -112,11 +112,14 @@ function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareSt
   /**
    * 原生设置生效且成功落盘之后，才让壳层重建托盘菜单。
    * 顺序不能颠倒，否则菜单会显示成还没写盘的旧值。
+   *
+   * 适配器可能回传一段平台差异说明（例如桌面层级只是近似实现）。这里**故意不转发**：
+   * 那段话写在 README 和课程里就够了，做成每次切换都弹的提示只会变成噪音。
    */
-  function afterNativeChange(result, nativeResult) {
+  function afterNativeChange(result) {
     if (result.ok !== true) return result;
     if (typeof shell.syncSettings === 'function') shell.syncSettings(result.snapshot.settings);
-    return nativeResult?.notice ? { ...result, notice: nativeResult.notice } : result;
+    return result;
   }
 
   handleState(CHANNELS.setBackgroundOpacity, (_event, value) => {
@@ -130,12 +133,12 @@ function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareSt
     if (!WINDOW_MODES.includes(value)) return invalidInput('窗口模式无效。');
     const applied = await shell.setWindowMode(value);
     if (applied && applied.ok === false) return failure(applied.error, engine.getSnapshot());
-    return afterNativeChange(runCommand(() => engine.updateSettings({ windowMode: value })), applied);
+    return afterNativeChange(runCommand(() => engine.updateSettings({ windowMode: value })));
   });
 
   handleState(CHANNELS.setCloseToTray, (_event, value) => {
     if (typeof value !== 'boolean') return invalidInput('关闭到托盘设置必须是布尔值。');
-    return afterNativeChange(runCommand(() => engine.updateSettings({ closeToTray: value })), null);
+    return afterNativeChange(runCommand(() => engine.updateSettings({ closeToTray: value })));
   });
 
   handleState(CHANNELS.setLaunchAtLogin, async (_event, value) => {
@@ -143,7 +146,7 @@ function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareSt
     const applied = await shell.setLaunchAtLogin(value);
     // 系统没有接受就不要落盘，否则界面会显示一个其实没生效的开关。
     if (applied && applied.ok === false) return failure(applied.error, engine.getSnapshot());
-    return afterNativeChange(runCommand(() => engine.updateSettings({ launchAtLogin: value })), null);
+    return afterNativeChange(runCommand(() => engine.updateSettings({ launchAtLogin: value })));
   });
 
   handle(CHANNELS.importData, async () => {

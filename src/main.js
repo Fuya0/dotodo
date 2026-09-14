@@ -27,6 +27,7 @@ let ipcRegistration = null;
 const isSmokeTest = process.argv.includes('--smoke-test');
 const captureTarget = readArgument('--capture=');
 const captureBackdrop = readArgument('--capture-backdrop=');
+const capturePage = readArgument('--capture-page=');
 const trayIconPath = path.join(__dirname, '..', 'assets', 'tray.png');
 const runtimeWarnings = [];
 let hasUnsavedChanges = false;
@@ -134,6 +135,11 @@ function createAppWindow() {
         if (!ready) throw new Error('Renderer 或 Preload 未准备完成。');
 
         if (captureTarget) {
+          if (capturePage) {
+            await smokeWindow.webContents.executeJavaScript(
+              `document.querySelector('.tab[data-page=${JSON.stringify(capturePage)}]')?.click(); true`
+            );
+          }
           // 让字体、布局和入场动画先落定，否则截到的是半成品。
           await new Promise((resolve) => setTimeout(resolve, 500));
           if (captureBackdrop) {
@@ -296,7 +302,9 @@ async function initialize() {
     onCommand: handleShellIntent,
     onError: (error) => console.error('[DoTodo shell]', error)
   });
-  for (const warning of shellController.initialize().warnings) addWarning(warning);
+  const shellBoot = shellController.initialize();
+  for (const warning of shellBoot.warnings) addWarning(warning);
+  if (shellBoot.shortcut.warning) console.info(`[DoTodo shell] ${shellBoot.shortcut.warning}`);
 
   ipcRegistration = registerIpc({
     ipcMain,

@@ -59,22 +59,23 @@ node exercises/electron/04-renderer/starter.test.js
 - 两端**夹紧**，不循环；
 - `total <= 0` 时返回 `-1`。
 
-### 5. `describeSurface(opacity)`
+### 5. `describeSurface({ r, g, b, alpha })`
 
-把透明度设置变成可以直接写进样式表的字符串：
+把一组颜色常量拼成可以直接写进样式表的声明：
 
 ```js
-describeSurface(0.82) → { cssValue: '0.82', percent: 82, declaration: '--surface-opacity: 0.82' }
+describeSurface({ r: 28, g: 28, b: 30, alpha: 0.88 })
+→ { css: 'rgba(28, 28, 30, 0.88)', declaration: '--surface: rgba(28, 28, 30, 0.88)' }
 ```
 
-- 先把值夹到 `0.55`–`1`；
-- `percent` 四舍五入取整；
-- `cssValue` 是夹紧后的数字转成的字符串；
-- `declaration` 形如 `--surface-opacity: 0.82`（冒号后有且只有一个空格）；
-- 不是有限数字（`undefined`、`null`、字符串、`NaN`）时返回 `null`。
+- `r` / `g` / `b` 四舍五入取整并夹到 `0`–`255`，缺失时按 `0` 处理；
+- `alpha` 夹到 `0.55`–`1`，最多两位小数；
+- `css` 形如 `rgba(28, 28, 30, 0.88)`（逗号后一个空格，`rgba` 与 `(` 之间没有空格）；
+- `declaration` 是 `--surface: ` 加上 `css`；
+- `alpha` 不是有限数字（缺失、`NaN`、字符串）时返回 `null`。
 
-注意这一题**故意和生产代码形状不同**：生产里返回的是拆开的字段，这里要你自己拼 CSS 声明。
-先别看 `src/renderer/view-model.js`，写完再对照。
+注意这一题**故意和生产代码形状不同**：生产里这些值是直接写在 CSS 里的常量，
+这里要你自己做夹紧、取整和字符串拼接。先别看 `src/renderer/view-model.js`。
 
 ### 6. `buildClassName(state)`
 

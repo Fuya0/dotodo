@@ -109,6 +109,7 @@ if (require.main !== module) {
 
 const outputPath = path.resolve(readArgument('out', path.join(projectDirectory, 'shots', 'today.png')));
 const backdrop = readArgument('backdrop', '#2f6fd0');
+const page = readArgument('page', 'today');
 const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'dotodo-shot-'));
 
 // 演示数据必须先过状态校验。否则应用会把整份状态当成"损坏"移到 recovery，
@@ -132,7 +133,13 @@ let settled = false;
 
 const child = spawn(
   electronPath,
-  ['.', '--smoke-test', `--capture=${outputPath}`, `--capture-backdrop=${backdrop}`],
+  [
+    '.',
+    '--smoke-test',
+    `--capture=${outputPath}`,
+    `--capture-backdrop=${backdrop}`,
+    ...(page === 'today' ? [] : [`--capture-page=${page}`])
+  ],
   {
     cwd: projectDirectory,
     env: { ...process.env, DOTODO_SMOKE_USER_DATA: userDataDirectory },

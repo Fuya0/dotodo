@@ -1,36 +1,45 @@
 /*
- * DoTodo 视觉系统：深色玻璃悬浮卡片。
+ * DoTodo 视觉系统：中性灰玻璃悬浮卡片。
  *
- * 关键约定：窗口本身是透明的（BrowserWindow transparent: true），整窗不再使用
- * setOpacity。玻璃感只由 `.app-shell::before` 这一层背景承担，它的 alpha 来自
- * `--surface-opacity`。所有文字和控件都是这个背景层之上的独立元素，永远保持
- * 完全不透明，所以把背景调到 55% 也不会让字变淡。
+ * 两条硬约定：
+ *
+ * 1. 窗口是透明的（BrowserWindow transparent: true），整窗不用 setOpacity。
+ *    玻璃感由 `.app-shell::before` 这一层背景承担，它的 alpha 是**固定的**。
+ *    以前这里挂了 `--surface-opacity`，由设置里的滑杆控制——那是个设计错误：
+ *    面板一淡，亮壁纸透上来，浅色文字立刻失去对比度。可读性不该是用户能调坏的设置项。
+ *
+ * 2. 调色板是近单色的：黑、白、灰三种调，唯一带颜色的是"已完成"的低饱和灰绿。
+ *    深蓝黑底会在彩色壁纸上显出蓝色调，看起来像"蓝色窗口"而不是玻璃。
  */
 
 :root {
-  --surface-color: #0c1424;
-  --surface-opacity: 0.82;
+  /* 唯一一层玻璃背景。固定值，不开放调节。 */
+  --surface: rgba(28, 28, 30, 0.88);
 
-  --ink: #e9eff8;
-  --ink-dim: #aab9ce;
-  --muted: #7c8da6;
+  --ink: #f5f5f7;
+  --ink-dim: rgba(235, 235, 245, 0.62);
+  --muted: rgba(235, 235, 245, 0.38);
 
   --line: rgba(255, 255, 255, 0.08);
   --line-strong: rgba(255, 255, 255, 0.14);
 
-  --accent: #38bdf8;
-  --accent-soft: rgba(56, 189, 248, 0.14);
-  --accent-ring: rgba(56, 189, 248, 0.38);
+  /* 近单色强调：实心元素用浅灰白配深色字。 */
+  --fill: rgba(235, 235, 245, 0.92);
+  --fill-ink: #1c1c1e;
+  --fill-soft: rgba(255, 255, 255, 0.1);
+  --fill-hover: rgba(255, 255, 255, 0.16);
 
-  --done: #4ade9b;
-  --done-soft: rgba(74, 222, 155, 0.16);
+  /* 唯一保留的颜色：完成态用低饱和灰绿，避免整块面板只有黑白而难以扫读。 */
+  --done: #8fbfa6;
+  --done-soft: rgba(143, 191, 166, 0.14);
 
-  --danger: #f4796b;
-  --danger-soft: rgba(244, 121, 107, 0.14);
+  /* 真正的错误仍然要能一眼看到，但压低饱和度。 */
+  --danger: #e06c60;
+  --danger-soft: rgba(224, 108, 96, 0.12);
 
-  --shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.34);
-  --radius: 20px;
-  --ease: 200ms cubic-bezier(0.32, 0.72, 0, 1);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.46), 0 2px 10px rgba(0, 0, 0, 0.3);
+  --radius: 14px;
+  --ease: 180ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 * {
@@ -51,7 +60,7 @@ body {
 }
 
 body {
-  padding: 8px;
+  padding: 6px;
   color: var(--ink);
   font-family: "Segoe UI Variable Text", "SF Pro Text", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
   font-size: 13px;
@@ -68,16 +77,20 @@ output {
 
 button:focus-visible,
 input:focus-visible {
-  outline: 2px solid var(--accent-ring);
+  outline: 2px solid rgba(235, 235, 245, 0.5);
   outline-offset: 1px;
 }
 
-/* ---------- 玻璃外壳 ---------- */
+/* ---------- 外壳 ---------- */
 
+/*
+ * 四行网格：提示条 / 标题栏 / 内容 / 底部标签。
+ * 提示条是**在流内**的一行，不再是绝对定位——以前它会盖住"今天要做"标题。
+ */
 .app-shell {
   position: relative;
   display: grid;
-  grid-template-rows: 46px minmax(0, 1fr) 38px;
+  grid-template-rows: auto 44px minmax(0, 1fr) 36px;
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -86,19 +99,48 @@ input:focus-visible {
   box-shadow: var(--shadow);
 }
 
-/* 唯一的玻璃背景层：只有它的 alpha 会随设置变化。 */
 .app-shell::before {
   content: "";
   position: absolute;
   inset: 0;
-  background-color: var(--surface-color);
-  opacity: var(--surface-opacity);
-  transition: opacity var(--ease);
+  background-color: var(--surface);
 }
 
 .app-shell > * {
   position: relative;
   z-index: 1;
+}
+
+.runtime-warning {
+  grid-row: 1;
+}
+
+.titlebar {
+  grid-row: 2;
+}
+
+#todayPage,
+#historyPage {
+  grid-row: 3;
+}
+
+.tabs {
+  grid-row: 4;
+}
+
+/* ---------- 提示条 ---------- */
+
+/*
+ * 一行细提示，不遮挡内容。运行期警告（数据损坏、保存失败、快捷键被占）都走这里。
+ */
+.runtime-warning {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-dim);
+  background: var(--danger-soft);
+  font-size: 10.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 /* ---------- 标题栏 ---------- */
@@ -107,7 +149,7 @@ input:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 8px 0 16px;
+  padding: 0 6px 0 12px;
   border-bottom: 1px solid var(--line);
   -webkit-app-region: drag;
 }
@@ -115,46 +157,45 @@ input:focus-visible {
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--ink);
+  font-weight: 620;
+  letter-spacing: 0.01em;
+  color: var(--ink-dim);
 }
 
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 7px;
-  background: linear-gradient(150deg, var(--accent), #2563eb);
-  box-shadow: 0 4px 10px rgba(56, 189, 248, 0.28);
+  width: 17px;
+  height: 17px;
+  border-radius: 6px;
+  background: var(--fill);
 }
 
 .brand-mark i {
-  width: 9px;
-  height: 5px;
-  border-left: 1.8px solid #06121f;
-  border-bottom: 1.8px solid #06121f;
+  width: 8px;
+  height: 4px;
+  border-left: 1.6px solid var(--fill-ink);
+  border-bottom: 1.6px solid var(--fill-ink);
   transform: translateY(-1px) rotate(-45deg);
 }
 
 .window-actions {
   display: flex;
-  gap: 2px;
+  gap: 1px;
   -webkit-app-region: no-drag;
 }
 
 .icon-button {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
-  border-radius: 9px;
-  color: var(--ink-dim);
+  border-radius: 8px;
+  color: var(--muted);
   background: transparent;
   cursor: pointer;
   transition: background var(--ease), color var(--ease);
@@ -162,64 +203,27 @@ input:focus-visible {
 
 .icon-button:hover {
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--fill-soft);
 }
 
 .icon-button[aria-pressed="true"] {
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--ink);
+  background: var(--fill-hover);
 }
 
 .close-button:hover {
-  color: #1b0b09;
-  background: var(--danger);
+  color: var(--fill-ink);
+  background: var(--fill);
 }
 
 .icon-button svg {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-/* ---------- 运行期提示与错误 ---------- */
-
-.runtime-warning {
-  position: absolute;
-  z-index: 20;
-  top: 46px;
-  left: 8px;
-  right: 8px;
-  padding: 8px 12px;
-  border: 1px solid rgba(244, 121, 107, 0.32);
-  border-radius: 12px;
-  color: #ffd9d3;
-  background: rgba(120, 38, 32, 0.94);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.error-area {
-  margin-top: 10px;
-  padding: 8px 12px;
-  border: 1px solid rgba(244, 121, 107, 0.32);
-  border-radius: 11px;
-  color: #ffd9d3;
-  background: var(--danger-soft);
-  font-size: 11px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-  animation: arrive var(--ease);
-}
-
-/* 同一块区域也用来报「做成了什么」，只是换成强调色而不是危险色。 */
-.error-area.is-info {
-  border-color: var(--accent-ring);
-  color: var(--ink-dim);
-  background: var(--accent-soft);
 }
 
 /* ---------- 主内容 ---------- */
@@ -228,20 +232,20 @@ input:focus-visible {
   display: flex;
   min-height: 0;
   flex-direction: column;
-  padding: 16px 18px 0;
+  padding: 14px 16px 0;
   overflow: hidden;
 }
 
 .hero {
-  padding-bottom: 14px;
+  padding-bottom: 12px;
 }
 
 .eyebrow {
-  margin: 0 0 3px;
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.08em;
+  margin: 0 0 2px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
 }
 
 .heading-row {
@@ -252,8 +256,8 @@ input:focus-visible {
 
 h1 {
   margin: 0;
-  font-size: 22px;
-  font-weight: 650;
+  font-size: 20px;
+  font-weight: 620;
   letter-spacing: -0.01em;
 }
 
@@ -264,11 +268,11 @@ h1 {
 }
 
 .progress-track {
-  height: 3px;
-  margin-top: 11px;
+  height: 2px;
+  margin-top: 10px;
   overflow: hidden;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.09);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .progress-track span {
@@ -276,8 +280,29 @@ h1 {
   width: 0;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--done), var(--accent));
+  background: var(--done);
   transition: width var(--ease);
+}
+
+/* ---------- 错误 / 信息提示 ---------- */
+
+.error-area {
+  margin-top: 10px;
+  padding: 7px 10px;
+  border: 1px solid rgba(224, 108, 96, 0.28);
+  border-radius: 9px;
+  color: #f2c9c4;
+  background: var(--danger-soft);
+  font-size: 10.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  animation: arrive var(--ease);
+}
+
+.error-area.is-info {
+  border-color: var(--line-strong);
+  color: var(--ink-dim);
+  background: var(--fill-soft);
 }
 
 /* ---------- 添加表单 ---------- */
@@ -286,23 +311,22 @@ h1 {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 46px;
-  padding: 4px 4px 4px 13px;
+  min-height: 40px;
+  padding: 3px 3px 3px 12px;
   border: 1px solid var(--line);
-  border-radius: 13px;
-  background: rgba(255, 255, 255, 0.05);
-  transition: border-color var(--ease), box-shadow var(--ease);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  transition: border-color var(--ease);
   -webkit-app-region: no-drag;
 }
 
 .todo-form:focus-within {
-  border-color: var(--accent-ring);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--line-strong);
 }
 
 .add-icon {
-  color: var(--accent);
-  font-size: 20px;
+  color: var(--muted);
+  font-size: 17px;
   font-weight: 300;
   line-height: 1;
 }
@@ -321,25 +345,23 @@ h1 {
   color: var(--muted);
 }
 
+/* 添加按钮做成安静的描边小块，不用实心高饱和色。 */
 .todo-form button {
-  height: 34px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 9px;
-  color: #04121e;
-  background: var(--accent);
-  font-size: 12px;
-  font-weight: 700;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--ink-dim);
+  background: transparent;
+  font-size: 11.5px;
   cursor: pointer;
-  transition: filter var(--ease), transform 120ms ease;
+  transition: background var(--ease), color var(--ease), border-color var(--ease);
 }
 
 .todo-form button:hover {
-  filter: brightness(1.08);
-}
-
-.todo-form button:active {
-  transform: scale(0.96);
+  color: var(--fill-ink);
+  background: var(--fill);
+  border-color: var(--fill);
 }
 
 /* ---------- 任务列表 ---------- */
@@ -347,44 +369,50 @@ h1 {
 .todo-list {
   min-height: 0;
   flex: 1;
-  padding: 8px 2px 10px 0;
+  padding: 6px 2px 10px 0;
   overflow: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
 }
 
 .todo-row {
   display: grid;
-  grid-template-columns: 16px 26px minmax(0, 1fr) auto 28px;
+  grid-template-columns: 14px 24px minmax(0, 1fr) 26px;
   align-items: center;
   gap: 6px;
-  min-height: 46px;
+  min-height: 42px;
   padding-left: 2px;
   border-bottom: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: 8px;
   animation: arrive var(--ease);
 }
 
 .todo-row:focus-visible {
   outline: none;
-  background: var(--accent-soft);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: var(--fill-soft);
 }
 
 .todo-row.dragging {
-  opacity: 0.45;
+  opacity: 0.4;
 }
 
 .todo-row.drag-over {
-  background: var(--accent-soft);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: var(--fill-soft);
+  box-shadow: inset 2px 0 0 var(--ink-dim);
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
 }
 
 .drag-handle {
   display: grid;
   place-items: center;
-  width: 16px;
-  height: 26px;
+  width: 14px;
+  height: 24px;
   padding: 0;
   border: 0;
   color: var(--muted);
@@ -401,7 +429,7 @@ h1 {
 }
 
 .drag-handle:hover {
-  color: var(--accent);
+  color: var(--ink);
 }
 
 .drag-handle:active {
@@ -409,39 +437,33 @@ h1 {
 }
 
 .drag-handle svg {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
   stroke-linecap: round;
 }
 
-@keyframes arrive {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-}
-
+/* 参考图里的勾选框是圆圈，不是圆角方块。 */
 .check-button {
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   padding: 0;
-  border: 1.5px solid var(--muted);
-  border-radius: 7px;
+  border: 1.5px solid rgba(235, 235, 245, 0.3);
+  border-radius: 50%;
   background: transparent;
   cursor: pointer;
   transition: border-color var(--ease), background var(--ease);
 }
 
 .check-button svg {
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
   fill: none;
-  stroke: #04121e;
+  stroke: var(--fill-ink);
   stroke-width: 2.4;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -451,7 +473,7 @@ h1 {
 }
 
 .check-button:hover {
-  border-color: var(--accent);
+  border-color: var(--ink-dim);
 }
 
 .todo-row.completed .check-button {
@@ -465,7 +487,7 @@ h1 {
 }
 
 .todo-text {
-  padding: 10px 2px;
+  padding: 9px 2px;
   overflow: hidden;
   font-size: 13px;
   text-overflow: ellipsis;
@@ -475,27 +497,16 @@ h1 {
 }
 
 .completed .todo-text {
-  color: var(--muted);
+  color: rgba(235, 235, 245, 0.45);
   text-decoration: line-through;
   text-decoration-thickness: 1px;
 }
 
-.continue-badge {
-  padding: 2px 6px;
-  border: 1px solid var(--accent-ring);
-  border-radius: 6px;
-  color: var(--accent);
-  background: var(--accent-soft);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
 .edit-input {
   width: 100%;
-  padding: 8px 2px;
+  padding: 7px 2px;
   border: 0;
-  border-bottom: 1px solid var(--accent);
+  border-bottom: 1px solid var(--ink-dim);
   outline: 0;
   color: var(--ink);
   background: transparent;
@@ -505,11 +516,11 @@ h1 {
 .delete-button {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 7px;
   color: var(--muted);
   background: transparent;
   opacity: 0;
@@ -529,8 +540,8 @@ h1 {
 }
 
 .delete-button svg {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.7;
@@ -542,37 +553,37 @@ h1 {
 .history-list {
   min-height: 0;
   flex: 1;
-  padding: 4px 2px 12px 0;
+  padding: 2px 2px 12px 0;
   overflow: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
 }
 
 .history-day + .history-day {
-  margin-top: 16px;
+  margin-top: 14px;
 }
 
 .history-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding: 0 2px 6px;
+  padding: 0 2px 4px;
 }
 
 .history-head h2 {
   margin: 0;
   color: var(--ink-dim);
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .history-row {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) auto auto;
+  grid-template-columns: 20px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 6px;
-  min-height: 38px;
+  min-height: 34px;
   padding-left: 2px;
   border-bottom: 1px solid var(--line);
 }
@@ -580,17 +591,17 @@ h1 {
 .check-indicator {
   display: grid;
   place-items: center;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border: 1.5px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: 50%;
 }
 
 .check-indicator svg {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   fill: none;
-  stroke: #04121e;
+  stroke: var(--fill-ink);
   stroke-width: 2.4;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -607,7 +618,7 @@ h1 {
 }
 
 .history-row .todo-text {
-  padding: 8px 2px;
+  padding: 7px 2px;
   font-size: 12.5px;
   cursor: default;
 }
@@ -626,19 +637,20 @@ h1 {
 
 .text-button {
   padding: 4px 8px;
-  border: 1px solid var(--accent-ring);
-  border-radius: 8px;
-  color: var(--accent);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  color: var(--ink-dim);
   background: transparent;
   font-size: 10px;
-  cursor: pointer;
   white-space: nowrap;
-  transition: color var(--ease), background var(--ease);
+  cursor: pointer;
+  transition: color var(--ease), background var(--ease), border-color var(--ease);
 }
 
 .text-button:hover {
-  color: #04121e;
-  background: var(--accent);
+  color: var(--fill-ink);
+  background: var(--fill);
+  border-color: var(--fill);
 }
 
 /* 历史行没有悬停以外的入口，删除按钮常驻显示。 */
@@ -655,7 +667,7 @@ h1 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding-bottom: 26px;
+  padding-bottom: 22px;
   color: var(--muted);
   text-align: center;
 }
@@ -663,33 +675,31 @@ h1 {
 .empty-check {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  margin-bottom: 12px;
-  border: 1px solid rgba(74, 222, 155, 0.24);
-  border-radius: 17px;
-  background: var(--done-soft);
-  transform: rotate(-3deg);
+  width: 42px;
+  height: 42px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
 }
 
 .empty-check span {
-  width: 17px;
-  height: 9px;
-  border-left: 2px solid var(--done);
-  border-bottom: 2px solid var(--done);
+  width: 15px;
+  height: 8px;
+  border-left: 1.8px solid var(--done);
+  border-bottom: 1.8px solid var(--done);
   transform: translateY(-2px) rotate(-45deg);
 }
 
 .empty-state h2 {
-  margin: 0 0 5px;
+  margin: 0 0 4px;
   color: var(--ink-dim);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .empty-state p {
   margin: 0;
-  font-size: 11px;
+  font-size: 10.5px;
 }
 
 /* ---------- 底部标签 ---------- */
@@ -698,14 +708,14 @@ h1 {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 0 14px;
+  padding: 0 12px;
   border-top: 1px solid var(--line);
 }
 
 .tab {
   padding: 5px 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 7px;
   color: var(--muted);
   background: transparent;
   font-size: 11px;
@@ -715,13 +725,13 @@ h1 {
 
 .tab:hover:not(:disabled) {
   color: var(--ink-dim);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--fill-soft);
 }
 
 .tab.is-active {
-  color: var(--accent);
-  background: var(--accent-soft);
-  font-weight: 650;
+  color: var(--ink);
+  background: var(--fill-hover);
+  font-weight: 600;
 }
 
 .tab:disabled {
@@ -729,41 +739,23 @@ h1 {
   cursor: not-allowed;
 }
 
-.tab-hint {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 9px;
-}
-
-kbd {
-  padding: 1px 5px;
-  border: 1px solid var(--line-strong);
-  border-bottom-width: 2px;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.06);
-  font: inherit;
-}
-
 /* ---------- 撤销条 ---------- */
 
 .undo-bar {
   position: absolute;
   z-index: 15;
-  right: 12px;
-  bottom: 46px;
-  left: 12px;
+  right: 10px;
+  bottom: 42px;
+  left: 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 9px 10px 9px 14px;
+  padding: 8px 8px 8px 12px;
   overflow: hidden;
   border: 1px solid var(--line-strong);
-  border-radius: 13px;
+  border-radius: 10px;
   color: var(--ink-dim);
-  background: rgba(18, 28, 46, 0.97);
+  background: rgba(38, 38, 40, 0.97);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
   font-size: 11px;
   animation: arrive var(--ease);
@@ -775,7 +767,7 @@ kbd {
   left: 0;
   width: 100%;
   height: 2px;
-  background: var(--accent);
+  background: var(--ink-dim);
   animation: undo-countdown 6s linear forwards;
 }
 
@@ -790,19 +782,19 @@ kbd {
 }
 
 .undo-bar button {
-  padding: 5px 11px;
-  border: 1px solid var(--accent-ring);
-  border-radius: 8px;
-  color: var(--accent);
-  background: var(--accent-soft);
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  color: var(--ink);
+  background: transparent;
   font-size: 11px;
-  font-weight: 650;
   cursor: pointer;
 }
 
 .undo-bar button:hover {
-  color: #04121e;
-  background: var(--accent);
+  color: var(--fill-ink);
+  background: var(--fill);
+  border-color: var(--fill);
 }
 
 /* ---------- 设置面板 ---------- */
@@ -810,30 +802,30 @@ kbd {
 .settings-panel {
   position: absolute;
   z-index: 18;
-  top: 50px;
-  right: 10px;
-  width: 232px;
-  padding: 6px 14px;
+  top: 46px;
+  right: 8px;
+  width: 224px;
+  padding: 4px 12px;
   border: 1px solid var(--line-strong);
-  border-radius: 15px;
-  background: rgba(18, 28, 46, 0.98);
+  border-radius: 12px;
+  background: rgba(38, 38, 40, 0.98);
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.46);
-  animation: arrive 160ms cubic-bezier(0.32, 0.72, 0, 1);
+  animation: arrive 150ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .settings-head {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  min-height: 34px;
+  min-height: 30px;
   border-bottom: 1px solid var(--line);
 }
 
 .settings-head h2 {
   margin: 0;
-  color: var(--ink-dim);
-  font-size: 11px;
-  font-weight: 700;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
   letter-spacing: 0.06em;
 }
 
@@ -841,30 +833,36 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 42px;
-  font-size: 12px;
+  min-height: 38px;
+  color: var(--ink-dim);
+  font-size: 11.5px;
 }
 
 .setting-row + .setting-row {
   border-top: 1px solid var(--line);
 }
 
+.settings-actions {
+  display: flex;
+  gap: 5px;
+}
+
 .segmented {
   display: flex;
-  gap: 2px;
+  gap: 1px;
   padding: 2px;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
 }
 
 .segment {
-  padding: 4px 9px;
+  padding: 3px 8px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   color: var(--muted);
   background: transparent;
-  font-size: 11px;
+  font-size: 10.5px;
   cursor: pointer;
   transition: color var(--ease), background var(--ease);
 }
@@ -874,14 +872,9 @@ kbd {
 }
 
 .segment.is-active {
-  color: #04121e;
-  background: var(--accent);
-  font-weight: 650;
-}
-
-.settings-actions {
-  display: flex;
-  gap: 6px;
+  color: var(--fill-ink);
+  background: var(--fill);
+  font-weight: 600;
 }
 
 .switch-row {
@@ -899,28 +892,27 @@ kbd {
 .switch {
   position: relative;
   flex: none;
-  width: 34px;
-  height: 20px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.14);
+  width: 32px;
+  height: 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.16);
   transition: background var(--ease);
 }
 
 .switch::after {
   content: "";
   position: absolute;
-  top: 3px;
-  left: 3px;
+  top: 2px;
+  left: 2px;
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #e9eff8;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  background: #f5f5f7;
   transition: transform var(--ease);
 }
 
 .switch-row input:checked + .switch {
-  background: var(--accent);
+  background: var(--done);
 }
 
 .switch-row input:checked + .switch::after {
@@ -928,27 +920,8 @@ kbd {
 }
 
 .switch-row input:focus-visible + .switch {
-  outline: 2px solid var(--accent-ring);
+  outline: 2px solid rgba(235, 235, 245, 0.5);
   outline-offset: 2px;
-}
-
-.range-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.range-wrap input {
-  width: 88px;
-  accent-color: var(--accent);
-}
-
-.range-wrap output {
-  width: 32px;
-  color: var(--muted);
-  font-size: 10px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {

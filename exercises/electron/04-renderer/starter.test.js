@@ -73,26 +73,26 @@ test('nextFocusIndex 处理空列表和越界的起点', () => {
   assert.equal(nextFocusIndex(-4, 3, 1), 0);
 });
 
-test('describeSurface 夹紧透明度并拼出 CSS 声明', () => {
-  assert.deepEqual(describeSurface(0.82), {
-    cssValue: '0.82', percent: 82, declaration: '--surface-opacity: 0.82'
+test('describeSurface 把颜色和 alpha 夹到合法范围并拼出 CSS 声明', () => {
+  assert.deepEqual(describeSurface({ r: 28, g: 28, b: 30, alpha: 0.88 }), {
+    css: 'rgba(28, 28, 30, 0.88)',
+    declaration: '--surface: rgba(28, 28, 30, 0.88)'
   });
-  assert.deepEqual(describeSurface(0.1), {
-    cssValue: '0.55', percent: 55, declaration: '--surface-opacity: 0.55'
+  assert.deepEqual(describeSurface({ r: 300, g: -10, b: 30.6, alpha: 0.5 }), {
+    css: 'rgba(255, 0, 31, 0.55)',
+    declaration: '--surface: rgba(255, 0, 31, 0.55)'
   });
-  assert.deepEqual(describeSurface(2), {
-    cssValue: '1', percent: 100, declaration: '--surface-opacity: 1'
-  });
-  assert.deepEqual(describeSurface(0.825), {
-    cssValue: '0.825', percent: 83, declaration: '--surface-opacity: 0.825'
+  assert.deepEqual(describeSurface({ alpha: 2 }), {
+    css: 'rgba(0, 0, 0, 1)',
+    declaration: '--surface: rgba(0, 0, 0, 1)'
   });
 });
 
-test('describeSurface 对非数字返回 null', () => {
+test('describeSurface 对缺失或非法的输入返回 null', () => {
   assert.equal(describeSurface(undefined), null);
   assert.equal(describeSurface(null), null);
-  assert.equal(describeSurface('0.8'), null);
-  assert.equal(describeSurface(Number.NaN), null);
+  assert.equal(describeSurface({ r: 28, g: 28, b: 30, alpha: Number.NaN }), null);
+  assert.equal(describeSurface({ r: 28, g: 28, b: 30, alpha: '0.8' }), null);
 });
 
 test('buildClassName 只拼接生效的修饰类', () => {

@@ -98,15 +98,13 @@ test('deriveTodayView 对进度百分比取整', () => {
   assert.equal(view.progressPercent, 33);
 });
 
-test('deriveTodayView 标记延续而来的任务并保留来源日期', () => {
+test('deriveTodayView 的任务行只暴露界面用得到的字段', () => {
   const view = deriveTodayView(makeSnapshot([
-    makeTask('a', { continuedFromTaskId: 'old-1', continuedFromDate: '2026-09-12' }),
-    makeTask('b')
+    makeTask('a', { continuedFromTaskId: 'old-1', continuedFromDate: '2026-09-12' })
   ]));
-  assert.equal(view.tasks[0].isContinued, true);
-  assert.equal(view.tasks[0].continuedFromDate, '2026-09-12');
-  assert.equal(view.tasks[1].isContinued, false);
-  assert.equal(view.tasks[1].continuedFromDate, null);
+  // 行上不再有「延续」角标，投影也就不再带这部分字段。
+  assert.deepEqual(Object.keys(view.tasks[0]).sort(), ['completed', 'completedAt', 'id', 'position', 'text']);
+  assert.equal(view.tasks[0].text, '任务 a');
 });
 
 test('deriveTodayView 在空清单时给出空状态文案，非空时为 null', () => {
@@ -231,14 +229,8 @@ test('deriveHistoryView 拒绝结构不合法的快照', () => {
 
 /* ---------- Settings ---------- */
 
-test('deriveSettingsView 投影透明度与窗口层级', () => {
+test('deriveSettingsView 投影窗口层级与两个原生开关', () => {
   const view = deriveSettingsView(makeSnapshot([]));
-  assert.equal(view.backgroundOpacity, 0.82);
-  assert.equal(view.opacityPercent, 82);
-  assert.equal(view.opacityLabel, '82%');
-  assert.equal(view.opacityCssValue, '0.82');
-  assert.equal(view.opacityMin, 55);
-  assert.equal(view.opacityMax, 100);
   assert.equal(view.windowMode, 'topmost');
   assert.deepEqual(view.windowModes, [
     { value: 'normal', label: '普通', selected: false },
@@ -247,6 +239,9 @@ test('deriveSettingsView 投影透明度与窗口层级', () => {
   ]);
   assert.equal(view.closeToTray, true);
   assert.equal(view.launchAtLogin, false);
+  // 背景透明度是固定的视觉常量，不再是一项可由用户调整的设置。
+  assert.equal('opacityPercent' in view, false);
+  assert.equal('backgroundOpacity' in view, false);
 });
 
 test('deriveSettingsView 保留桌面模式，并在未知模式下回落到普通模式', () => {
@@ -257,12 +252,6 @@ test('deriveSettingsView 保留桌面模式，并在未知模式下回落到普�
   const unknown = deriveSettingsView(makeHistorySnapshot([], { windowMode: 'floating-magic' }));
   assert.equal(unknown.windowMode, 'normal');
   assert.deepEqual(unknown.windowModes.map((mode) => mode.selected), [true, false, false]);
-});
-
-test('deriveSettingsView 夹紧越界的透明度，并在缺值时使用默认值', () => {
-  assert.equal(deriveSettingsView(makeHistorySnapshot([], { backgroundOpacity: 0.1 })).opacityPercent, 55);
-  assert.equal(deriveSettingsView(makeHistorySnapshot([], { backgroundOpacity: 5 })).opacityPercent, 100);
-  assert.equal(deriveSettingsView(makeHistorySnapshot([], { backgroundOpacity: 'x' })).opacityPercent, 82);
 });
 
 test('deriveSettingsView 把开关类设置强制成布尔值', () => {

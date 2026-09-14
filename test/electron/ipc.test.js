@@ -237,7 +237,7 @@ test('failed settings commands do not refresh the native shell', async () => {
   assert.equal(harness.calls.some(([name]) => name === 'syncSettings'), false);
 });
 
-test('desktop window mode is accepted and reports the approximation notice', async () => {
+test('desktop window mode is accepted and its platform caveat is not surfaced as a toast', async () => {
   const harness = createHarness({
     shell: { setWindowMode: () => ({ ok: true, mode: 'desktop', notice: '桌面层级是近似实现。' }) }
   });
@@ -246,7 +246,8 @@ test('desktop window mode is accepted and reports the approximation notice', asy
   const result = await invoke(harness, 'settings:set-window-mode', 'desktop');
 
   assert.equal(result.ok, true);
-  assert.equal(result.notice, '桌面层级是近似实现。');
+  // 平台差异写在文档和课程里，不做成每次切换都弹的提示。
+  assert.equal(result.notice, undefined);
   assert.deepEqual(harness.calls.filter(([name]) => name === 'updateSettings'), [
     ['updateSettings', { windowMode: 'desktop' }]
   ]);

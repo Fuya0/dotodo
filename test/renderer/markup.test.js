@@ -17,6 +17,8 @@ const html = fs.readFileSync(path.join(rendererDirectory, 'index.html'), 'utf8')
 const app = fs.readFileSync(path.join(rendererDirectory, 'app.js'), 'utf8');
 const viewModel = fs.readFileSync(path.join(rendererDirectory, 'view-model.js'), 'utf8');
 const styles = fs.readFileSync(path.join(rendererDirectory, 'styles.css'), 'utf8');
+/** 注释里可以解释「以前为什么这样写」，所以做源码级检查前要去掉注释。 */
+const stylesCode = styles.replace(/\/\*[\s\S]*?\*\//g, '');
 
 function matchAll(source, pattern) {
   return [...source.matchAll(pattern)].map((match) => match[1]);
@@ -59,7 +61,7 @@ test('渲染脚本只调用这一阶段开放的主进程接口', () => {
   const allowed = new Set([
     'getSnapshot', 'getStatus', 'addTask', 'editTask', 'toggleTask', 'deleteTodayTask', 'undo',
     'reorderTask', 'deleteHistoryTask', 'continueTask',
-    'setBackgroundOpacity', 'setWindowMode', 'setCloseToTray', 'setLaunchAtLogin',
+    'setWindowMode', 'setCloseToTray', 'setLaunchAtLogin',
     'importData', 'exportData', 'openDataFolder',
     'minimizeWindow', 'closeWindow'
   ]);
@@ -108,10 +110,32 @@ test('view-model.js 同时支持 Node 测试与浏览器全局', () => {
   assert.match(viewModel, /^function deriveTodayView\(/m);
 });
 
-test('玻璃透明度只作用在背景层，内容层没有整体透明', () => {
-  assert.match(styles, /\.app-shell::before\s*\{[\s\S]*?opacity:\s*var\(--surface-opacity\)/);
-  assert.match(app, /setProperty\('--surface-opacity'/);
+test('玻璃背景是固定的中性灰，且不开放给用户调', () => {
+  // 背景层只认一个固定 alpha；以前这里挂过 --surface-opacity，会把文字对比度调坏。
+  assert.match(stylesCode, /\.app-shell::before\s*\{[\s\S]*?background-color:\s*var\(--surface\)/);
+  assert.match(stylesCode, /--surface:\s*rgba\(28,\s*28,\s*30/);
+  assert.doesNotMatch(stylesCode, /--surface-opacity/);
+  assert.doesNotMatch(app, /surface-opacity/);
+  assert.doesNotMatch(app, /setBackgroundOpacity/);
   assert.doesNotMatch(app, /setOpacity/);
+});
+
+test('提示条在网格流内，不会盖住标题', () => {
+  // 绝对定位的警告条会盖住「今天要做」，所以它必须是网格的第 1 行。
+  assert.doesNotMatch(stylesCode, /\.runtime-warning\s*\{[^}]*position:\s*absolute/);
+  assert.match(stylesCode, /\.runtime-warning\s*\{[^}]*grid-row:\s*1/);
+  assert.match(stylesCode, /grid-template-rows:\s*auto 44px minmax\(0, 1fr\) 36px/);
+});
+
+test('界面里没有透明度滑杆，也没有底部快捷键提示', () => {
+  assert.doesNotMatch(html, /opacitySlider/);
+  assert.doesNotMatch(html, /opacityValue/);
+  assert.doesNotMatch(html, /tab-hint/);
+});
+
+test('任务行不再渲染「延续」角标', () => {
+  assert.doesNotMatch(app, /continue-badge/);
+  assert.doesNotMatch(stylesCode, /\.continue-badge/);
 });
 
 test('撤销条自带六秒倒计时动画', () => {

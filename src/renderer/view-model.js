@@ -22,13 +22,9 @@ const HISTORY_EMPTY_COPY = Object.freeze({
   copy: '每过一天，当天的清单会完整留在这里。'
 });
 
-const DEFAULT_OPACITY = 0.82;
-const OPACITY_MIN = 0.55;
-const OPACITY_MAX = 1;
-
 /**
- * 三种窗口层级。`desktop` 在主进程里是近似实现（移出任务栏，但不真的钉在桌面上），
- * 切换时主进程会回传一段 `notice` 说明差异，界面负责如实展示。
+ * 三种窗口层级。`desktop` 在主进程里是近似实现（移出任务栏，但不真的钉在桌面上）。
+ * 这个差异写在课程和 README 里，不再每次切换时弹一条提示。
  */
 const WINDOW_MODES = Object.freeze([
   { value: 'normal', label: '普通' },
@@ -91,18 +87,11 @@ function deriveSettingsView(snapshot) {
   assertSnapshot(snapshot);
 
   const settings = snapshot.settings && typeof snapshot.settings === 'object' ? snapshot.settings : {};
-  const surface = describeSurface(settings.backgroundOpacity) ?? describeSurface(DEFAULT_OPACITY);
   const windowMode = WINDOW_MODES.some((mode) => mode.value === settings.windowMode)
     ? settings.windowMode
     : WINDOW_MODES[0].value;
 
   return {
-    backgroundOpacity: surface.value,
-    opacityPercent: surface.percent,
-    opacityLabel: `${surface.percent}%`,
-    opacityCssValue: surface.cssValue,
-    opacityMin: Math.round(OPACITY_MIN * 100),
-    opacityMax: Math.round(OPACITY_MAX * 100),
     windowMode,
     windowModes: WINDOW_MODES.map((mode) => ({ ...mode, selected: mode.value === windowMode })),
     closeToTray: Boolean(settings.closeToTray),
@@ -121,18 +110,6 @@ function resolveDropIndex(midpoints, clientY) {
   return index === -1 ? midpoints.length - 1 : index;
 }
 
-/** 把透明度夹到合法区间，给出数字、百分比和 CSS 字符串。 */
-function describeSurface(value) {
-  const opacity = Number(value);
-  if (!Number.isFinite(opacity)) return null;
-  const clamped = Math.min(OPACITY_MAX, Math.max(OPACITY_MIN, opacity));
-  return {
-    value: clamped,
-    percent: Math.round(clamped * 100),
-    cssValue: String(clamped)
-  };
-}
-
 /** 一行任务只暴露界面真正需要的字段，顺序由 position 表达。 */
 function toTaskRow(task, position) {
   return {
@@ -140,9 +117,7 @@ function toTaskRow(task, position) {
     position,
     text: task.text,
     completed: Boolean(task.completed),
-    completedAt: task.completedAt ?? null,
-    isContinued: Boolean(task.continuedFromTaskId),
-    continuedFromDate: task.continuedFromDate ?? null
+    completedAt: task.completedAt ?? null
   };
 }
 

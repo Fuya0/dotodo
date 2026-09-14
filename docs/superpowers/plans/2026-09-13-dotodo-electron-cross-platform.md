@@ -10,6 +10,38 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-12-dotodo-electron-cross-platform-design.md`
 
+## Post-acceptance revisions
+
+Recorded here rather than rewritten into the steps above, so the plan still shows what was intended
+before the first run of the real application.
+
+**R1 — The background alpha became a fixed constant.** The plan and spec called for a 55%–100%
+opacity slider that touched only the glass surface. Layering was implemented correctly, but a slider
+still lets the user destroy legibility: at 55% over a bright wallpaper the light text loses contrast
+even though it is not faded. The slider is gone; `--surface-opacity` is gone; the surface is a fixed
+`rgba(28, 28, 30, 0.88)`. `setBackgroundOpacity` is removed from the preload API.
+
+**R2 — The palette is near-monochrome.** The dark navy `#0c1424` picked up the wallpaper's hue and
+read as "a blue window" instead of glass. The surface is now neutral grey, the accents are grey/white,
+and the only remaining colour is a desaturated grey-green for completed items.
+
+**R3 — Platform caveats moved out of the UI.** `setWindowMode('desktop')` still returns a truthful
+`notice`, but `ipc.js` no longer forwards it: a one-time fact belongs in the README, not in a toast
+that repeats on every switch.
+
+**R4 — Shortcut collisions degrade silently.** A failed `globalShortcut.register` no longer adds a
+runtime warning. It is a non-fatal degradation, and the warning used to occupy an absolutely
+positioned banner that covered the page heading.
+
+**R5 — Smaller noise removals.** The `Ctrl N` hint in the tab bar and the "延续" badge on Today rows
+are gone. The runtime warning band moved from absolute positioning into row 1 of the app grid so it
+can never overlap the heading.
+
+**R6 — A screenshot harness now exists.** `tools/capture-window.js` renders the real window against a
+chosen backdrop and writes a PNG, which is how R1–R5 were verified. The agent sandbox could not start
+Electron before this.
+
+
 ## Global Constraints
 
 - Keep `nodeIntegration: false`, `contextIsolation: true`, and `sandbox: true`.
@@ -282,6 +314,9 @@ Use a draggable header, right-aligned layer/settings/minimize/close controls, pr
 - [x] **Step 5: Implement glass CSS without whole-window opacity**
 
 `BrowserWindow` stays transparent. A background pseudo-element receives `--surface-opacity`; the content subtree remains at opacity `1`.
+
+Superseded by R1: the variable and the slider were both removed after the first real run. The
+background pseudo-element now receives a fixed `var(--surface)`.
 
 - [x] **Step 6: Wire Today commands and keyboard behavior**
 

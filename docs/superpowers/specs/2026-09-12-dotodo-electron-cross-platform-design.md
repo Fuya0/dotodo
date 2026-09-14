@@ -136,6 +136,9 @@ Windows 数据目录使用 Electron `app.getPath('userData')`；macOS 使用同�
 - `BrowserWindow` 保持透明，无原生标题栏；
 - 背景层使用深蓝黑半透明色，内容层保持完全不透明；
 - 透明度滑块只改变背景层 alpha，不调用整窗 `setOpacity`；
+  （**已修订**：第一次真机试用手感后，滑块与 `--surface-opacity` 都已移除，背景改为固定的中性灰
+  `rgba(28, 28, 30, 0.88)`。理由是滑杆允许用户把文字对比度调坏。见计划文档
+  `2026-09-13-dotodo-electron-cross-platform.md` 的 Post-acceptance revisions R1/R2。）
 - 主强调色为青蓝，完成色为薄荷绿，危险操作为柔和珊瑚红；
 - 细边框、克制阴影、适度圆角，不加入图片或字体资源；
 - 标题栏左侧为应用名和日期，右侧依次为层级、设置、最小化、关闭；

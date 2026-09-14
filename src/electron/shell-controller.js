@@ -87,8 +87,9 @@ function createShellController(options) {
     attachCloseHandler();
     attachBeforeQuitHandler();
 
+    // 快捷键冲突不写进 warnings：那会让一条非致命的降级占掉界面顶部一整条提示，
+    // 甚至盖住标题。注册结果仍然原样返回，由组合根决定写进日志。
     const shortcut = registerShortcut();
-    if (shortcut.warning) warnings.push(shortcut.warning);
 
     return { ok: true, trayCreated, shortcut, warnings };
   }

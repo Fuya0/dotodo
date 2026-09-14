@@ -178,14 +178,15 @@ test('initialize 创建托盘、注册全局快捷键并返回结果', () => {
   assert.equal(GLOBAL_ACCELERATOR, 'CommandOrControl+Shift+Space');
 });
 
-test('快捷键被其他程序占用时给出可读警告而不是崩溃', () => {
+test('快捷键被其他程序占用时静默降级，不占用界面提示位', () => {
   const harness = createHarness();
   harness.globalShortcut.blocked = true;
   const result = harness.controller.initialize();
 
   assert.equal(result.shortcut.registered, false);
   assert.match(result.shortcut.warning, /占用/);
-  assert.deepEqual(result.warnings, [result.shortcut.warning]);
+  // 冲突是非致命降级：注册结果照常返回，但不写进 warnings（那会变成界面顶部的一条提示）。
+  assert.deepEqual(result.warnings, []);
 });
 
 test('托盘创建失败时快捷键仍然可用', () => {

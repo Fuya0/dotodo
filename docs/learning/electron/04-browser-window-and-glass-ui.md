@@ -30,20 +30,31 @@
 | `src/index.html` `src/renderer.js` `src/styles.css` | 删除（旧版单窗口实现） |
 | `src/main.js` | `htmlPath` 指向 `renderer/index.html`，冒烟检查加严 |
 
-## 窗口透明 ≠ 内容透明
+## 窗口透明 ≠ 内容透明，也 ≠ 可读性由用户决定
 
-旧实现用 `BrowserWindow.setOpacity(0.94)` 做「半透明感」。这看起来像玻璃，实际上是**把整个窗口连文字一起调淡**：透明度越低，任务文字越难读，按钮对比度越差。
+最早两版在这里走过两条弯路，都值得记下来。
 
-正确做法是分两层：
+**第一条弯路：用 `BrowserWindow.setOpacity(0.94)` 做「半透明感」。**
+它看起来像玻璃，实际上是把整个窗口连文字一起调淡——透明度越低，任务文字越难读。
+
+**第二条弯路：改对了分层，但把 alpha 做成了设置项。**
+分层之后文字确实不透明了，可是设置里有个 55%–100% 的滑杆。用户拉到 55%，
+亮色壁纸透上来，浅色文字压在亮底上**照样看不清**——文字没被淡化，但它失去了对比度。
+把可读性交给一个滑杆，本身就是错的。
+
+最终做法是固定的两层：
 
 ```css
-/* 唯一的玻璃背景层 */
+:root {
+  /* 唯一一层玻璃背景。固定值，不开放调节。 */
+  --surface: rgba(28, 28, 30, 0.88);
+}
+
 .app-shell::before {
   content: "";
   position: absolute;
   inset: 0;
-  background-color: var(--surface-color);
-  opacity: var(--surface-opacity);   /* ← 只有这一层随设置变化 */
+  background-color: var(--surface);
 }
 
 /* 所有内容都在背景层之上，完全不透明 */
@@ -60,15 +71,36 @@ new BrowserWindow({
 });
 ```
 
-于是「背景 55%」时：卡片是半透明的深蓝黑，可以看到桌面；文字、勾选框、进度条依然是 100% 不透明。可读性和透明度设置不再互相牵制。
+三个约束一起成立，界面才稳定：
 
-`--surface-opacity` 由渲染进程写进根元素：
+| 约束 | 保证什么 |
+| --- | --- |
+| 窗口 `transparent: true` | 圆角外能看到桌面，卡片像是浮着的 |
+| 背景层固定 88% alpha | 亮壁纸也不会把文字冲淡 |
+| `setOpacity` 完全不用 | 文字、勾选框、进度条永远 100% 不透明 |
 
-```js
-dom.root.style.setProperty('--surface-opacity', String(opacity));
+`test/renderer/markup.test.js` 会把这三条都钉住：背景层只能引用 `var(--surface)`，
+`--surface-opacity` 这个变量不许再出现，渲染层不许出现 `setBackgroundOpacity`。
+
+### 底色为什么是中性灰而不是深蓝
+
+一开始用的是深蓝黑（`#0c1424`）。压在彩色壁纸上时，那点蓝会被壁纸衬出来，
+整块面板看起来像「一个蓝色的窗口」，而不是一块玻璃。
+
+改成中性灰（`#1c1c1e`）之后，面板在任何壁纸上都只是「更暗的一层」，
+不会带上壁纸的色相。这是玻璃质感的关键：**玻璃本身没有颜色，只有明度差。**
+
+### 怎么验证这件事
+
+写这段样式的时候，应该真的把窗口放到亮壁纸前看一眼。本项目为此加了一个截图工具：
+
+```powershell
+node tools/capture-window.js --out=shots/today.png --backdrop=#2f6fd0
+node tools/capture-window.js --out=shots/light.png --backdrop=#e9e9ec
 ```
 
-`app.js` 里只有这一处改透明度，`setOpacity` 在渲染层彻底消失了。`test/renderer/markup.test.js` 会检查这一点。
+`--backdrop` 会先给页面根元素铺一个纯色底再截图。因为窗口本身是透明的，
+不铺底的话截出来只有半透明的暗色像素，看不出「压在亮壁纸上还能不能读」。
 
 ## 拖动窗口靠 CSS，不靠 JS
 
@@ -260,20 +292,23 @@ npm run smoke
 - 渲染脚本不得出现 `require(`、`process.`、`ipcRenderer`；
 - 渲染脚本只调用 `window.dotodo` 里这一课允许的方法；
 - 页面不得有内联脚本，且 `view-model.js` 必须先于 `app.js` 加载；
-- 玻璃透明度只出现在 `.app-shell::before` 上。
+- 玻璃背景只能引用 `var(--surface)`，`--surface-opacity` 与 `setBackgroundOpacity` 都不许再出现；
+- 提示条必须在网格流内（`grid-row: 1`），不许用绝对定位盖住标题。
 
 这类测试不验证「好不好看」，但能拦住手误改名、忘记改选择器、偷偷引入 Node 这类最容易发生、又只有在运行时才炸的错误。
 
 ## 常见错误
 
 - 继续用 `setOpacity()` 调透明度，导致文字一起变淡；
+- 把背景 alpha 做成设置项，用户一拉就把文字对比度调坏；
+- 用深蓝黑当玻璃底色，压在彩色壁纸上显出蓝色调，看起来像「蓝色窗口」；
+- 把提示条写成 `position: absolute`，于是它盖住了页面标题；
 - 按钮忘记 `-webkit-app-region: no-drag`，点不动；
 - 用 `innerHTML` 写入用户文本，引入 XSS；
 - 把 `<script>` 写成内联本体，被 CSP 拦掉；
 - 每一行都给 `tabIndex = 0`，Tab 键变成折磨；
 - 没有 `settled` 标志，一次编辑提交两遍；
 - 重绘后不恢复焦点，按一次 `Space` 焦点就丢了；
-- 重绘时重建整个列表，却忘了 `replaceChildren` 会清掉旧的 DOM 引用；
 - 在渲染层拼日期字符串用 `toISOString()`，把 UTC 日期当成用户的今天。
 
 ## 阅读顺序

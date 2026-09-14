@@ -177,7 +177,7 @@ if (mode === 'topmost') { window.setAlwaysOnTop(true, 'floating'); window.setSki
 if (mode === 'desktop') { window.setAlwaysOnTop(false, 'normal');  window.setSkipTaskbar(true);  }
 ```
 
-`desktop`（钉在桌面上、被其他窗口盖住）在 Electron 里没有等价 API。可选的近似就是「移出任务栏 + 不置顶」，但它**不等于**真正的桌面层级。与其悄悄假装，不如让适配器返回一段说明：
+`desktop`（钉在桌面上、被其他窗口盖住）在 Electron 里没有等价 API。可选的近似就是「移出任务栏 + 不置顶」，但它**不等于**真正的桌面层级。与其悄悄假装，不如让适配器把差异作为返回值交出来：
 
 ```js
 return {
@@ -188,14 +188,22 @@ return {
 };
 ```
 
-这段 `notice` 一路传到渲染进程并显示出来：
+**但这段 `notice` 不会显示在界面上。** 一开始的做法是把它转发给渲染进程，每次切到「桌面」
+就弹一条说明——结果就是用户每次切换都被念一遍同样的话。现在的处理是：
 
 ```js
-// ipc.js
-return afterNativeChange(runCommand(...), applied);   // { ...result, notice }
-// app.js
-if (result.notice) showMessage(result.notice);
+// ipc.js：故意不转发
+function afterNativeChange(result) {
+  if (result.ok !== true) return result;
+  if (typeof shell.syncSettings === 'function') shell.syncSettings(result.snapshot.settings);
+  return result;
+}
 ```
+
+适配器仍然诚实地返回差异（这是个真实事实，测试也在断言它），但它的去处是**文档**——
+README 的「平台状态」和 `docs/release/macos-release-checklist.md`——而不是一个反复弹的提示。
+
+这条规则可以推广：**平台差异属于文档，不属于每次操作都要看一遍的 toast。**
 
 把平台差异做成**可替换的适配器**（`windowModeAdapter`）而不是一串 `if (platform === ...)`，是因为将来真的做了 Windows 原生 Z-order 扩展时，只需要换掉适配器，接口和测试都不用动。
 

@@ -15,7 +15,6 @@ const UNDO_VISIBLE_MS = 6000;
 const MESSAGE_VISIBLE_MS = 6000;
 
 const dom = {
-  root: document.documentElement,
   warning: document.querySelector('#runtimeWarning'),
   todayPage: document.querySelector('#todayPage'),
   historyPage: document.querySelector('#historyPage'),
@@ -43,8 +42,6 @@ const dom = {
   settingsButton: document.querySelector('#settingsButton'),
   settingsPanel: document.querySelector('#settingsPanel'),
   settingsCloseButton: document.querySelector('#settingsCloseButton'),
-  opacitySlider: document.querySelector('#opacitySlider'),
-  opacityValue: document.querySelector('#opacityValue'),
   windowModeGroup: document.querySelector('#windowModeGroup'),
   closeToTrayToggle: document.querySelector('#closeToTrayToggle'),
   launchAtLoginToggle: document.querySelector('#launchAtLoginToggle'),
@@ -82,8 +79,6 @@ async function runCommand(promise) {
   }
   if (!result || result.cancelled) return null;
   if (result.ok === false) showMessage(result.error);
-  // 主进程可以附带一段说明（例如桌面层级只是近似实现），界面负责如实转述。
-  if (result.notice) showMessage(result.notice, 'info');
   if (result.snapshot) applySnapshot(result.snapshot);
   return result;
 }
@@ -105,7 +100,6 @@ function render() {
 }
 
 function renderSettings(settings) {
-  applySurfaceOpacity(settings);
   renderWindowModes(settings);
   dom.closeToTrayToggle.checked = settings.closeToTray;
   dom.launchAtLoginToggle.checked = settings.launchAtLogin;
@@ -174,12 +168,6 @@ function createRow(row, index) {
   text.title = row.text;
   text.addEventListener('dblclick', () => beginEdit(row.id));
 
-  const badge = document.createElement('span');
-  badge.className = 'continue-badge';
-  badge.textContent = '延续';
-  badge.title = `延续自 ${row.continuedFromDate}`;
-  badge.hidden = !row.isContinued;
-
   const remove = document.createElement('button');
   remove.type = 'button';
   remove.className = 'delete-button';
@@ -187,7 +175,7 @@ function createRow(row, index) {
   remove.innerHTML = DELETE_ICON;
   remove.addEventListener('click', () => deleteTodayTask(row.id));
 
-  item.append(handle, check, text, badge, remove);
+  item.append(handle, check, text, remove);
   return item;
 }
 
@@ -533,24 +521,7 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
-/* ---------- 设置：背景透明度与窗口层级 ---------- */
-
-/** 玻璃透明度只改 `--surface-opacity`，不碰整窗 opacity，也不碰文字。 */
-function applySurfaceOpacity(settings) {
-  dom.root.style.setProperty('--surface-opacity', settings.opacityCssValue);
-  dom.opacitySlider.value = String(settings.opacityPercent);
-  dom.opacityValue.value = settings.opacityLabel;
-}
-
-dom.opacitySlider.addEventListener('input', () => {
-  const opacity = Number(dom.opacitySlider.value) / 100;
-  dom.root.style.setProperty('--surface-opacity', String(opacity));
-  dom.opacityValue.value = `${dom.opacitySlider.value}%`;
-});
-
-dom.opacitySlider.addEventListener('change', () => {
-  runCommand(window.dotodo.setBackgroundOpacity(Number(dom.opacitySlider.value) / 100));
-});
+/* ---------- 设置：窗口层级与原生开关 ---------- */
 
 /** 模式按钮只建一次，之后原地更新选中态，这样点击后焦点不会丢。 */
 function renderWindowModes(settings) {
