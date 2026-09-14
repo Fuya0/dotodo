@@ -56,4 +56,26 @@ check('超长路径不会把提示条撑出窗口',
   longRect.right <= window.innerWidth + 1 && longRect.height <= 80,
   `right=${Math.round(longRect.right)} 高度=${Math.round(longRect.height)}`);
 
+// 上面那串路径里全是连字符，浏览器本来就能在连字符处断行 —— 只测它的话，
+// 把 overflow-wrap 删掉这些断言照样通过（实测过），等于什么都没验。
+// 所以再换一个**没有断点的长串**。
+//
+// 判据不能写成「文字有没有超出内边距」。没有 overflow-wrap 时，提示条自己会被
+// 内容撑宽（grid 项的默认 min-width:auto 拒绝缩到 min-content 以下），
+// 文字和盒子一起变宽，内边距始终是满足的 —— 那种断言永远为真，抓不到东西。
+// 实测：强制 overflow-wrap:normal 之后，提示条右边界从 383 涨到 469.6，
+// 而窗口只有 390 宽 ——「文字未顶穿内边距」却依然成立。
+//
+// 真正能抓到的是「盒子有没有超出窗口」。
+const unbroken = `损坏的原文件已保留在：C:\\Users\\someone\\${'r'.repeat(90)}.json`;
+band.textContent = unbroken;
+await sleep(50);
+const unbrokenRect = band.getBoundingClientRect();
+check('没有断点的长串不会把提示条撑出窗口',
+  unbrokenRect.right <= window.innerWidth + 1,
+  `提示条 right=${unbrokenRect.right.toFixed(1)}，窗口宽=${window.innerWidth}`);
+check('提示条的滚动宽度不超出窗口',
+  band.scrollWidth <= window.innerWidth + 1,
+  `scrollWidth=${band.scrollWidth}，窗口宽=${window.innerWidth}`);
+
 return results;
