@@ -9,6 +9,7 @@
     "start": "electron .",
     "test": "node --test \"test/**/*.test.js\"",
     "smoke": "node tools/run-smoke.js",
+    "ui-check": "node tools/ui-check.js",
     "icons": "node tools/make-tray-icon.js",
     "shot": "node tools/capture-window.js",
     "paths": "electron . --print-paths",

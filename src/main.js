@@ -29,6 +29,9 @@ const printPaths = process.argv.includes('--print-paths');
 const captureTarget = readArgument('--capture=');
 const captureBackdrop = readArgument('--capture-backdrop=');
 const capturePage = readArgument('--capture-page=');
+// 在渲染进程里执行一段脚本，把它返回的结果打到标准输出。
+// 这是 test/ui/ 里那些交互场景的入口：它们真的去点、去按键，然后断言 DOM。
+const driveScript = readArgument('--drive=');
 const trayIconPath = path.join(__dirname, '..', 'assets', 'tray.png');
 const runtimeWarnings = [];
 let hasUnsavedChanges = false;
@@ -136,6 +139,16 @@ function createAppWindow() {
           })()
         `);
         if (!ready) throw new Error('Renderer 或 Preload 未准备完成。');
+
+        if (driveScript) {
+          // 等界面完成首次渲染再开始驱动，否则第一批选择器可能还查不到元素。
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          const source = fs.readFileSync(driveScript, 'utf8');
+          const outcome = await smokeWindow.webContents.executeJavaScript(
+            `(async () => {\n${source}\n})()`
+          );
+          console.log(`DOTODO_DRIVE_RESULT ${JSON.stringify(outcome)}`);
+        }
 
         if (captureTarget) {
           if (capturePage) {

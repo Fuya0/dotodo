@@ -23,7 +23,7 @@
 | `test/electron/ipc.test.js` | 新增 5 条导入导出边界测试 |
 | `package.json` | 新增 `verify:win` 脚本 |
 
-## 测试的四个层次
+## 测试的五个层次
 
 先分清每一层能证明什么，不然会误以为"测试通过 = 没问题"。
 
@@ -31,12 +31,19 @@
 | --- | --- | --- | --- |
 | 单元测试 | `test/domain/*`、`test/renderer/view-model.test.js` | 纯逻辑在给定输入下输出正确 | 这些逻辑有没有被真正调用 |
 | 集成测试 | `test/electron/ipc.test.js`、`test/infrastructure/*` | 频道、校验、落盘、恢复连起来是对的 | 真实 Electron 能否启动 |
-| 冒烟测试 | `npm run smoke` | 真实 Electron 里 Preload、IPC、DOM 真的通了 | 界面好不好看、托盘能不能点 |
-| 人工验收 | `docs/testing/electron-windows-manual-checklist.md` | 透明窗口、托盘、DPI、多屏、真实数据 | 代码里没被想到的分支 |
+| 静态约束 | `test/renderer/markup.test.js`、`test/tools/ui-scenarios.test.js` | 选择器对得上、渲染层没偷偷 require Node、界面上没有不该出现的元素 | 任何运行期行为 |
+| 冒烟测试 | `npm run smoke` | 真实 Electron 里 Preload、IPC、DOM 真的通了 | 界面好不好看、点一下会怎样 |
+| 交互场景 | `npm run ui-check` | 在真实渲染进程里点击、按键之后 DOM 和数据变成什么样 | 托盘、DPI、多屏、真实安装 |
+| 人工验收 | `docs/testing/electron-windows-manual-checklist.md` | 透明窗口、托盘、DPI、多屏、真实数据、手感 | 代码里没被想到的分支 |
 
-第 3 层缺失时，最典型的翻车方式是：所有 Node 测试全绿，但应用一启动就是白屏——因为 `htmlPath` 写错了，而这一点只有真的加载页面才能发现。
+第 4 层缺失时，最典型的翻车方式是：所有 Node 测试全绿，但应用一启动就是白屏——因为 `htmlPath` 写错了，而这一点只有真的加载页面才能发现。
 
-第 4 层缺失时，最典型的翻车方式是：功能全对，但窗口在你 150% 缩放的副屏上糊成一片。
+第 5 层缺失时，最典型的翻车方式是：**改了一版配色，顺手删掉了一个元素，结果某个交互悄悄坏了，而所有测试仍然是绿的。**
+这个项目真的踩过：把透明度滑杆从设置面板里拿掉之后，只有静态检查能发现「元素不在了」，
+但「拿掉之后设置面板的其他开关还能不能点」没有任何测试覆盖。交互场景就是补这个洞的。
+
+第 6 层永远补不满：自动化看不见你的显示器。但它覆盖的越多，"人工验收"就越只剩真正的
+人眼项目，而不是把「点一下按钮」也算进去。
 
 ## 冒烟测试为什么要隔离数据目录
 

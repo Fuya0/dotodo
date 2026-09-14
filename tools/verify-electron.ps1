@@ -112,6 +112,13 @@ Invoke-Step '冒烟测试 (npm run smoke)' {
   Assert-NativeSuccess 'npm run smoke' $LASTEXITCODE
 }
 
+Invoke-Step '交互场景 (npm run ui-check)' {
+  Write-Host '在真实渲染进程里点按钮、按键，并断言 DOM。'
+  Write-Host '每个场景跑完会留一张截图在 shots\ui\，可以直接看一眼界面。'
+  npm run ui-check
+  Assert-NativeSuccess 'npm run ui-check' $LASTEXITCODE
+}
+
 if (-not $SkipPack) {
   Invoke-Step '打包到目录 (npm run pack)' {
     npm run pack

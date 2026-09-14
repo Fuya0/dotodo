@@ -145,11 +145,14 @@ npm start
 
 ```powershell
 npm start            # 开发运行
-npm test             # 全部单元与集成测试（142 条断言）
+npm test             # 全部单元与集成测试（160+ 条断言）
 npm run smoke        # 真实 Electron 冒烟测试（隔离数据目录）
+npm run ui-check     # 在真实渲染进程里重放交互并断言 DOM，每个场景留一张截图
 npm run icons        # 重新生成托盘图标位图
+npm run shot         # 把界面渲染成 PNG，可指定底色与页面
+npm run paths        # 打印应用实际使用的数据目录与状态文件路径
 npm run pack         # 打包到 release/win-unpacked（不出安装器）
-npm run verify:win   # 完整自动验证：测试 + 冒烟 + 打包 + 体积分类 + 内存
+npm run verify:win   # 完整自动验证：测试 + 冒烟 + 交互 + 打包 + 体积分类 + 内存
 npm run dist:win     # Windows NSIS 安装包
 ```
 

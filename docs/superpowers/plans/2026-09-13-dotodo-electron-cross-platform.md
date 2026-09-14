@@ -41,6 +41,15 @@ can never overlap the heading.
 chosen backdrop and writes a PNG, which is how R1–R5 were verified. The agent sandbox could not start
 Electron before this.
 
+**R7 — Renderer interactions are now automated.** R1–R5 changed the renderer and were only verified by
+static screenshots and static text checks: nothing proved that clicking a checkbox, pressing `F2` or
+undoing a delete still worked after the palette rewrite and the element removals. `npm run ui-check`
+drives the real renderer through `--drive=<script>`, runs scenarios from `test/ui/`, asserts the DOM
+and leaves a screenshot per scenario. It covers 64 assertions across the Today list, page switching,
+the History page and the settings panel, and it is a step in `npm run verify:win`. The Windows
+acceptance checklist now marks those rows as automated, leaving the human only the things a machine
+cannot see (tray, DPI, multi-monitor, animation feel).
+
 
 ## Global Constraints
 

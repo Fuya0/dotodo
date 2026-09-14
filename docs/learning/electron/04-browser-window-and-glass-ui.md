@@ -297,6 +297,94 @@ npm run smoke
 
 这类测试不验证「好不好看」，但能拦住手误改名、忘记改选择器、偷偷引入 Node 这类最容易发生、又只有在运行时才炸的错误。
 
+## 真正点一下：交互场景
+
+静态检查只能证明「文件内容对得上」，纯函数测试只能证明「投影算得对」。**在浏览器里点一下会发生什么，
+这两者都证明不了。**
+
+本项目为此加了一层：把一段脚本丢进真实渲染进程执行，让它去点、去按键，然后断言 DOM。
+
+```powershell
+npm run ui-check
+```
+
+```text
+── today.js
+  ✓ 添加后列表多一行
+  ✓ 新任务出现在列表底部
+  ✓ 勾选后该行标记为完成
+  ✓ 双击进入行内编辑
+  ✓ Enter 提交编辑
+  ✓ Escape 放弃修改
+  ✓ Space 切换完成状态
+  ✓ F2 进入编辑
+  ✓ Alt+↓ 把第一行下移一位
+  ✓ 撤销后回到原来的位置
+  ...
+```
+
+### 它是怎么接起来的
+
+三块，各自很小：
+
+**① 主进程加一个通道**（`src/main.js`）：
+
+```js
+if (driveScript) {
+  const source = fs.readFileSync(driveScript, 'utf8');
+  const outcome = await smokeWindow.webContents.executeJavaScript(`(async () => {\n${source}\n})()`);
+  console.log(`DOTODO_DRIVE_RESULT ${JSON.stringify(outcome)}`);
+}
+```
+
+**② 场景就是一个函数体**（`test/ui/today.js`），结尾 `return results;`：
+
+```js
+input.value = '写周报';
+form.requestSubmit();
+await expect('添加后列表多一行', () => rows().length === startCount + 1);
+```
+
+**③ 运行器**（`tools/ui-check.js`）为每个场景建一个隔离数据目录、写入演示清单、启动 Electron、
+把前置代码和场景拼起来执行、再把返回的断言数组打成一张表。
+
+### 三个关键取舍
+
+**断言要等条件，不要等时间。** 界面变化是异步的（一次 IPC 往返 + 一次重绘），
+`sleep(500)` 在快机器上浪费时间、在慢机器上又会假失败：
+
+```js
+async function waitFor(predicate, timeout = 4000) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    try { if (predicate()) return true; } catch { /* 元素还没出现 */ }
+    if (Date.now() > deadline) return false;
+    await sleep(25);
+  }
+}
+```
+
+**每个场景一个隔离数据目录。** 场景会真的改数据（添加、删除、排序），共用一个目录的话
+场景之间会互相污染，而且结果取决于执行顺序。
+
+**失败时留下证据。** 每个场景跑完都截一张图（`shots/ui/<场景名>.png`）。断言失败时，
+看一眼截图往往比重读断言更快定位问题。
+
+### 场景文件也要有守卫
+
+场景写错（忘了 `return results`、用了 `require`、选择器拼错）只有在启动 Electron 之后才会暴露，
+太慢。`test/tools/ui-scenarios.test.js` 用静态检查提前拦：
+
+- 每个场景必须以 `return results;` 结尾；
+- 场景里不许出现 `require(` 或 `process.`（渲染进程里没有 Node）；
+- 场景查询的每个 `#id` 和 `.class` 都必须真实存在——`#id` 查 `index.html`，
+  `.class` 还要算上 `app.js` 运行时拼出来的那些（`` `history-row${...}` `` 这种模板字符串）。
+
+最后一条一开始写错过两次，值得记下来：它先是被「断言这个元素**不**存在」误伤，
+后来又把模板字符串拼出来的类名当成不存在。**守卫本身也是代码，也会错。**
+判断「缺失断言」用的是后面跟的是 `=== null` 还是 `.length === 0`——
+所以 `!q('#x').hidden`（断言存在且可见）仍然会被校验，而 `q('#x') === null` 会被跳过。
+
 ## 常见错误
 
 - 继续用 `setOpacity()` 调透明度，导致文字一起变淡；

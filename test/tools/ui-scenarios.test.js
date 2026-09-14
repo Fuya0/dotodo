@@ -1,0 +1,98 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const scenarioDirectory = path.join(__dirname, '..', '..', 'test', 'ui');
+const prelude = fs.readFileSync(path.join(scenarioDirectory, '_prelude.js'), 'utf8');
+
+function scenarioFiles() {
+  return fs
+    .readdirSync(scenarioDirectory)
+    .filter((name) => name.endsWith('.js') && !name.startsWith('_'))
+    .sort();
+}
+
+test('至少有一个交互场景', () => {
+  assert.ok(scenarioFiles().length > 0, 'test/ui/ 下应该有场景文件。');
+});
+
+test('每个场景都以 return results 收尾', () => {
+  // 场景是当作函数体丢进渲染进程执行的。忘了 return，runner 就收不到任何断言，
+  // 只会报一句「没有收到场景结果」，排查起来要绕一圈。这里提前拦住。
+  for (const name of scenarioFiles()) {
+    const source = fs.readFileSync(path.join(scenarioDirectory, name), 'utf8');
+    assert.match(source, /return results;\s*$/, `场景 ${name} 必须以 return results; 结尾。`);
+  }
+});
+
+test('场景里不能出现 require 或 process', () => {
+  // 场景跑在渲染进程里，那里没有 Node。用了就会在运行时才炸。
+  for (const name of scenarioFiles()) {
+    const source = fs.readFileSync(path.join(scenarioDirectory, name), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/.*$/gm, '$1');
+    assert.doesNotMatch(source, /\brequire\s*\(/, `${name} 不应调用 require()`);
+    assert.doesNotMatch(source, /\bprocess\s*\./, `${name} 不应访问 process`);
+  }
+});
+
+test('前置代码提供了场景依赖的辅助函数', () => {
+  for (const helper of ['const q =', 'const qa =', 'function check(', 'async function expect(', 'function press(']) {
+    assert.ok(prelude.includes(helper), `_prelude.js 缺少 ${helper}`);
+  }
+  assert.match(prelude, /const results = \[\];/);
+});
+
+const rendererDirectory = path.join(__dirname, '..', '..', 'src', 'renderer');
+const html = fs.readFileSync(path.join(rendererDirectory, 'index.html'), 'utf8');
+const app = fs.readFileSync(path.join(rendererDirectory, 'app.js'), 'utf8');
+
+const declaredIds = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]));
+
+/**
+ * 界面上的类名有两个来源：HTML 里写死的，和 app.js 在渲染时拼出来的。
+ * 后者既有普通字符串（`className = 'check-button'`），也有模板字符串
+ * （`` className = `history-row${...}` ``），所以两种字面量都要扫。
+ */
+function classTokensFromApp() {
+  const literals = [...app.matchAll(/'([^']*)'|"([^"]*)"|`([^`]*)`/g)]
+    .map((match) => match[1] ?? match[2] ?? match[3]);
+  return literals
+    .flatMap((literal) => literal.split(/[\s${}?:.,;()[\]]+/))
+    .filter((token) => /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(token));
+}
+
+const knownClasses = new Set([
+  ...[...html.matchAll(/\sclass="([^"]+)"/g)].flatMap((match) => match[1].split(/\s+/)),
+  ...classTokensFromApp()
+]);
+
+/**
+ * 判断某个选择器后面跟的是不是「这东西不该存在」的断言。
+ * 这两种写法都算：`q('#x') === null` 和 `qa('.x').length === 0`。
+ * `!q('#x').hidden` 不算——那是在断言元素存在且可见，仍然要校验选择器本身。
+ */
+function isAbsenceAssertion(source, match) {
+  const tail = source.slice(match.index + match[0].length).trimStart();
+  return tail.startsWith('=== null') || /^\.length\s*===\s*0/.test(tail);
+}
+
+test('场景用到的界面选择器都真的存在', () => {
+  for (const name of scenarioFiles()) {
+    const source = fs.readFileSync(path.join(scenarioDirectory, name), 'utf8');
+
+    for (const match of source.matchAll(/\bq\('#([A-Za-z0-9_-]+)'\)/g)) {
+      if (isAbsenceAssertion(source, match)) continue;
+      assert.ok(declaredIds.has(match[1]), `${name} 查询了不存在的 id：${match[1]}`);
+    }
+
+    for (const match of source.matchAll(/\bqa?\('\.([A-Za-z0-9_-]+)'\)/g)) {
+      if (isAbsenceAssertion(source, match)) continue;
+      assert.ok(
+        knownClasses.has(match[1]),
+        `${name} 使用了 HTML 和 app.js 里都没有的类：.${match[1]}`
+      );
+    }
+  }
+});
