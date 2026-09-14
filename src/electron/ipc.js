@@ -59,7 +59,10 @@ function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareSt
       return result;
     } catch (error) {
       if (typeof status.markDirty === 'function') status.markDirty(error);
-      return failure(`保存失败：${errorMessage(error)}`, result.snapshot);
+      // `applied: true` 是关键：领域层已经接受了这次修改（快照里有它），只有落盘失败了。
+      // 渲染进程分不清"引擎拒绝"和"存盘失败"的话，就会把用户刚打的字留在输入框里，
+      // 而那条任务其实已经出现在列表上了——再按一次回车就会重复一条。
+      return failure(`保存失败：${errorMessage(error)}`, result.snapshot, { applied: true });
     }
   }
 
@@ -219,8 +222,9 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-function failure(error, snapshot) {
-  return snapshot === undefined ? { ok: false, error } : { ok: false, error, snapshot };
+function failure(error, snapshot, extra) {
+  if (snapshot === undefined) return { ok: false, error };
+  return extra ? { ok: false, error, snapshot, ...extra } : { ok: false, error, snapshot };
 }
 
 module.exports = { CHANNELS, registerIpc };

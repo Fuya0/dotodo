@@ -173,6 +173,22 @@ test('failed commands are not persisted and save failures become serializable re
   assert.match(result.error, /保存失败.*disk full/);
   assert.deepEqual(result.snapshot, brokenDisk.commandResult.snapshot);
   assert.deepEqual(dirtyErrors, ['disk full']);
+  // `applied` 告诉渲染进程「领域层已经接受了这次修改，只是没落盘」。
+  // 少了它，界面分不清"引擎拒绝"和"存盘失败"，会把用户打的字留在输入框里，
+  // 而那条任务其实已经出现在列表上了。
+  assert.equal(result.applied, true);
+});
+
+test('engine rejections are not marked as applied', async () => {
+  const harness = createHarness({
+    engine: { addTask: () => ({ ok: false, error: '领域拒绝', snapshot: { marker: 'same' } }) }
+  });
+  register(harness);
+
+  const result = await invoke(harness, 'task:add', '合法文本');
+
+  assert.equal(result.ok, false);
+  assert.equal(result.applied, undefined, '引擎拒绝时没有东西进列表，不能标记 applied');
 });
 
 test('settings reject coerced values and coordinate native effects', async () => {

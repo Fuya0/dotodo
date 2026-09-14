@@ -86,6 +86,10 @@ async function runCommand(promise) {
 function applySnapshot(snapshot) {
   state.snapshot = snapshot;
   render();
+  // 运行期状态（保存失败、只存在内存里、数据损坏）是主进程算的，启动时只取过一次。
+  // 每次应用快照顺手刷新一次，用户才会在出问题之后看到那条持久提示——
+  // 否则错误条 6 秒后消失，用户会以为一切正常，继续往一个存不下去的清单里加东西。
+  refreshStatus();
 }
 
 /* ---------- 渲染 ---------- */
@@ -479,8 +483,9 @@ dom.form.addEventListener('submit', async (event) => {
   const value = dom.input.value.trim();
   if (!value) return;
   const result = await addTask(value);
-  // 只有主进程确认保存后才清空输入框，否则用户刚打的字会白白丢掉。
-  if (result && result.ok) dom.input.value = '';
+  // 清空输入框的判据是「这条任务已经进列表了」，而不是「一切顺利」：
+  // 落盘失败时任务仍在列表上（`applied`），这时留着原文只会让用户再添一条重复的。
+  if (result && (result.ok || result.applied)) dom.input.value = '';
   dom.input.focus();
 });
 
