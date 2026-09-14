@@ -633,20 +633,22 @@ Removed `docs/research/windows-desktop-todo-architecture.md`,
 `docs/superpowers/specs/2026-09-11-dotodo-stack-spike-design.md` after moving their durable content
 into the appendix.
 
-- [ ] **Step 4: Remove generated release output and local WPF worktree safely**
+- [x] **Step 4: Remove generated release output and local WPF worktree safely**
 
-Deferred to the user. These are the only irreversible actions left, and they touch 1.7 GB of local
-state rather than anything tracked:
+Done after the user approved it. Both worktrees were verified clean first (`git status --porcelain`
+empty), removed with `git worktree remove --force`, and then `git worktree prune`; `release/` was
+deleted with `Remove-Item -Recurse -Force` and rebuilt from scratch afterwards with `npm run dist:win`
+(which is what later proved the deletion was recoverable). Net: about 2.2 GB freed.
 
-| 目标 | 大小 | 命令 | 为什么先不动 |
-| --- | --- | --- | --- |
-| `release/` | 473.9 MB | `Remove-Item -Recurse -Force release` | 里面是旧版 v1 安装器，重建需要再跑一次 `npm run dist:win` |
-| `.worktrees/electron-v1` | 449.2 MB | `git worktree remove .worktrees/electron-v1` | 分支 `codex/electron-v1` 已全部快进合入 `main`，删除工作树不丢历史 |
-| `.worktrees/windows-v1` | 1275.6 MB | `git worktree remove .worktrees/windows-v1` | 分支 `feature/windows-v1` 有 8 个未合并提交，是唯一的 WPF 实现记录 |
+**The branches were deliberately kept.** `codex/electron-v1` is merged, and `feature/windows-v1` is
+the only record of the abandoned WPF implementation — removing a worktree does not touch the branch,
+so that history is still there. Deleting the branches is a separate decision.
 
-First verify absolute paths are inside `F:\杂\转开发\DoTodo` before running any of them. Delete
-`.worktrees/windows-v1` only after Windows acceptance, and keep the branch until permanent branch
-deletion is separately approved.
+| 目标 | 大小 | 实际做了什么 |
+| --- | --- | --- |
+| `release/` | 473.9 MB | 已删除，随后用 `npm run dist:win` 从零重建（安装器 106.3 MB） |
+| `.worktrees/electron-v1` | 449.2 MB | 已移除；分支 `codex/electron-v1` 保留 |
+| `.worktrees/windows-v1` | 1275.6 MB | 已移除；分支 `feature/windows-v1` 保留，WPF 记录仍在 |
 
 Run: `git worktree list` to confirm the current state.
 
@@ -654,7 +656,7 @@ Run: `git worktree list` to confirm the current state.
 
 `docs/learning/electron/README.md` maps all nine chapters plus the appendix, each with its source
 files, expected duration, exercise count and grading command. `exercises/electron/README.md` indexes
-the eight exercise sets (44 questions, 87 grading assertions) and explains why they stay out of
+the nine exercise sets (59 questions, 130 grading assertions) and explains why they stay out of
 `npm test`.
 
 - [x] **Step 6: Rewrite README for learners and users**
@@ -692,7 +694,7 @@ git commit -m "docs: finalize Electron learning workspace"
 - [ ] **Step 1: Complete Windows manual acceptance with the user**
 
 Blocked on the user: every stage from Task 4 onward produced interface behaviour that no automated
-test can confirm. Walk `docs/testing/electron-windows-manual-checklist.md` (11 groups, ~80 items) and
+test can confirm. Walk `docs/testing/electron-windows-manual-checklist.md` (12 groups, 87 items) and
 report any finding before packaging starts. Do not treat this step as done because the tests pass.
 
 - [x] **Step 2: Build the Windows NSIS installer**
@@ -700,7 +702,7 @@ report any finding before packaging starts. Do not treat this step as done becau
 Run: `npm run dist:win`. Record installer size separately from `win-unpacked` size.
 
 **Done.** `release/DoTodo-Setup-1.0.0-x64.exe` — installer download 106.3 MB, packaged directory
-367.4 MB, `app.asar` 119.7 KB. The first attempt failed on an aborted Electron archive download;
+367.6 MB, `app.asar` 126.5 KB. The first attempt failed on an aborted Electron archive download;
 setting `ELECTRON_MIRROR` and `ELECTRON_BUILDER_BINARIES_MIRROR` to the npmmirror mirrors fixed it and
 is now documented in the README and lesson 09.
 
@@ -711,11 +713,30 @@ Verified as part of this step:
 - The packaged executable was launched against an isolated data directory and screenshotted; it
   renders identically to the development build, which proves the asar resource paths (renderer page
   and tray bitmap) resolve in the shipped form.
+- Later automated: `npm run verify:win` now ends with a **打包版壳层启动** step that runs the packaged
+  app's own `--smoke-test` and asserts `DOTODO_SMOKE_READY` plus `trayCreated`. The screenshot proved
+  the renderer resolves from the asar; this step proves the *shell* (tray, main process) does too —
+  `npm run smoke` only ever exercised the development tree.
 
 - [ ] **Step 3: Install, launch, upgrade and uninstall on Windows**
 
-Checklist written and waiting: `docs/release/windows-release-checklist.md` section 5. Must be done on
-a clean Windows machine or VM — leftovers from the development machine hide most upgrade problems.
+**The objectively checkable half is now automated.** `npm run verify:installer` (nine steps) silently
+installs the real installer into a temporary directory, asserts the program files and uninstaller are
+there, that the desktop and start-menu shortcuts were created, that the registry uninstall entry
+points at *this* install directory, that the installed copy actually boots (its own `--smoke-test`,
+requiring the tray icon), then silently uninstalls and asserts the files, shortcuts and registry entry
+are gone and that the user data directory was neither deleted nor modified. It refuses to run when a
+`DoTodo` install already exists, because a second silent install would overwrite that user's uninstall
+entry. It passes with exit code 0 and leaves no residue.
+
+Two real defects were found while writing it: the registry `DisplayName` is `DoTodo 1.0.0` (with the
+version), so matching it with equality found nothing — and the same helper backs the "don't clobber an
+existing install" guard, so that guard was silently useless; and electron-builder's per-user install
+never writes `InstallLocation`, so requiring it made that step fail forever.
+
+**What is still open, and why it cannot be automated here:** cover-upgrade on a clean machine, UAC
+behaviour, antivirus false positives, and anything hidden by this machine's leftover registry and
+caches. See `docs/release/windows-release-checklist.md` section 5.1.
 
 - [x] **Step 4: Explain and configure code signing without storing secrets**
 

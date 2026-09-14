@@ -1,6 +1,6 @@
 # DoTodo Electron 习题集
 
-八组习题，和 `docs/learning/electron/` 的课一一对应。每一组都是同一套结构：
+九组习题，和 `docs/learning/electron/` 的课一一对应。每一组都是同一套结构：
 
 ```text
 exercises/electron/NN-xxx/
@@ -55,8 +55,9 @@ node exercises/electron/04-renderer/starter.test.js
 | [06](06-native-shell/) | 第 6 课 | 6 | 13 | 菜单投影、条件判断、读回校验、平台能力探测、字符串格式化 |
 | [07](07-testing/) | 第 7 课 | 12 | 38 | 错误码分类、汇总统计、字节格式化、恢复决策、环境准备、场景筛选、超时判定、几何断言、目录差异 |
 | [08](08-build-and-release/) | 第 8 课 | 6 | 15 | 模板替换、`flatMap`、比较与排序、路径分类、集合差集 |
+| [09](09-packaging/) | 第 9 课 | 6 | 18 | 绝对路径校验与归一化、带引号命令行解析、正则转义与前缀匹配、分类汇总、版本号数字比较 |
 
-合计 **53 道题 / 112 条判分测试**。
+合计 **59 道题 / 130 条判分测试**。
 
 一次跑完全部（会看到一堆红，做完再看）：
 
@@ -78,6 +79,7 @@ Get-ChildItem -Recurse -Filter starter.test.js exercises | ForEach-Object { node
 | 06 | `src/electron/shell-controller.js` |
 | 07 | `tools/verify-electron.ps1`、`src/infrastructure/json-state-store.js` |
 | 08 | `package.json` 的 `build` 段、`tools/verify-electron.ps1` |
+| 09 | `tools/verify-installer.ps1`、`tools/ensure-electron-binary.js`、`docs/release/windows-release-checklist.md` |
 
 生产代码通常比习题多不少东西——错误处理、平台差异、注释、以及为了可测试而做的拆分。
 读完可以问自己一句：**习题里我写的版本，缺的到底是什么？**
