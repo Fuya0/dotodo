@@ -76,6 +76,25 @@ test('内存测量用一次性数据目录启动打包版', () => {
   assert.match(text, /Remove-Item \$probeData -Recurse -Force/);
 });
 
+test('环境信息会等 electron 二进制就位，而不是直接判死', () => {
+  // npm ci 在 electron 二进制落地之前就返回，实测差约半秒。这段窗口里
+  // Test-Path 拿到 False，脚本会报「请先执行 npm install」—— 而用户刚执行完，
+  // 紧接着的 npm test 也会因为 electron 包自我修复失败而红。
+  assert.match(text, /function Wait-ForElectronBinary/);
+  assert.match(text, /\$electronBinary = Wait-ForElectronBinary/);
+  assert.doesNotMatch(
+    text,
+    /Test-Path \$electronBinary/,
+    '别再退回「Test-Path 一下，没有就抛」的老写法。'
+  );
+});
+
+test('等待 electron 二进制是有上限的', () => {
+  // 没上限的话，依赖真的没装时脚本会一直挂着，而不是报错。
+  assert.match(text, /\[int\]\$TimeoutSeconds = \d+/);
+  assert.match(text, /return \$null/);
+});
+
 test('内存测量只统计自己那棵进程树', () => {
   // Electron 是多进程的，要加起来；但机器上可能还开着别处的 DoTodo/electron，
   // 按进程名抓会把别人的内存算进这个数字里。

@@ -71,6 +71,31 @@ function Get-ProcessTreeId([int]$RootId) {
   return $ids
 }
 
+function Wait-ForElectronBinary([int]$TimeoutSeconds = 30) {
+  # npm ci 会在 electron 的二进制落地之前就返回。实测：npm ci 退出码 0 之后的
+  # 那一瞬间 Test-Path node_modules\electron\dist\electron.exe 是 False，大约
+  # 半秒后才变成 True。这段窗口里碰 require('electron') 会触发 electron 包
+  # 自己去重新解压，撞上已经存在的目录，报 os error 183 和
+  # "Electron failed to install correctly"。
+  #
+  # 后果是：新克隆的仓库执行 clone → npm ci → npm run verify:win，会在
+  # 「环境信息」和「单元与集成测试」两步报出跟代码毫无关系的失败，
+  # 而且提示是「请先执行 npm install」—— 你刚执行完。
+  # 与其让每个人自己撞一次，不如在这里等它就位。
+  $binary = Join-Path $repoRoot 'node_modules\electron\dist\electron.exe'
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  $announced = $false
+  while (-not (Test-Path $binary)) {
+    if ((Get-Date) -gt $deadline) { return $null }
+    if (-not $announced) {
+      Write-Host '等待 electron 二进制就位（npm 会在解压完成前返回）……' -ForegroundColor Yellow
+      $announced = $true
+    }
+    Start-Sleep -Milliseconds 200
+  }
+  return $binary
+}
+
 function Invoke-Step {
   param(
     [Parameter(Mandatory)][string]$Name,
@@ -116,8 +141,8 @@ Invoke-Step '环境信息' {
   Write-Host "PowerShell        : $($PSVersionTable.PSVersion)"
   Write-Host "操作系统          : $([System.Environment]::OSVersion.VersionString)"
 
-  $electronBinary = Join-Path $repoRoot 'node_modules\electron\dist\electron.exe'
-  if (-not (Test-Path $electronBinary)) {
+  $electronBinary = Wait-ForElectronBinary
+  if (-not $electronBinary) {
     throw ' 找不到 node_modules\electron\dist\electron.exe，请先执行 npm install。'
   }
 }
