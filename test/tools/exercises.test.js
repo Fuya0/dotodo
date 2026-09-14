@@ -82,6 +82,36 @@ test('习题索引列出了每一组习题', () => {
   }
 });
 
+test('习题索引里的总数与实际一致', () => {
+  // 文档里的数字没有任何东西守着，所以每次加题都得手动改三处，忘一处就长期不一致。
+  // 这里把总数算出来，直接和索引里那句话对。
+  let questions = 0;
+  let tests = 0;
+  for (const directory of exerciseDirectories()) {
+    questions += Object.keys(require(path.join(directory, 'starter.js'))).length;
+    tests += (fs.readFileSync(path.join(directory, 'starter.test.js'), 'utf8').match(/^test\(/gm) ?? []).length;
+  }
+
+  assert.match(
+    exercisesIndex,
+    new RegExp(`合计 \\*\\*${questions} 道题 / ${tests} 条判分测试\\*\\*`),
+    `习题索引里的合计应该写成「合计 **${questions} 道题 / ${tests} 条判分测试**」。`
+  );
+});
+
+test('习题索引里每一组的分项数字与实际一致', () => {
+  for (const directory of exerciseDirectories()) {
+    const name = path.basename(directory);
+    const questions = Object.keys(require(path.join(directory, 'starter.js'))).length;
+    const tests = (fs.readFileSync(path.join(directory, 'starter.test.js'), 'utf8').match(/^test\(/gm) ?? []).length;
+    const row = exercisesIndex.split(/\r?\n/).find((line) => line.includes(`](${name}/)`));
+    assert.ok(row, `索引里找不到 ${name} 那一行。`);
+    const cells = row.split('|').map((cell) => cell.trim());
+    assert.equal(Number(cells[3]), questions, `${name} 那一行的题数写错了。`);
+    assert.equal(Number(cells[4]), tests, `${name} 那一行的测试数写错了。`);
+  }
+});
+
 test('习题索引里的每一组都真实存在', () => {
   const linked = [...exercisesIndex.matchAll(/\]\((\d\d-[a-z-]+)\//g)].map((match) => match[1]);
   assert.ok(linked.length > 0, '索引里应该至少有一个习题组链接。');
