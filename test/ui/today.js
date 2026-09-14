@@ -120,6 +120,27 @@ check('拖出列表后立刻清掉落点提示', qa('.todo-row.drag-over').lengt
 window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 8 }));
 check('取消拖拽后顺序不变', rowTexts().join('|') === beforeCancel.join('|'));
 
+/* ---------- 拖拽中窗口失焦（验收清单 2.19） ---------- */
+
+// 拖着行的时候按 Alt+Tab 切走，窗口会收到 blur。这时必须取消拖拽，
+// 否则回来之后会留下一个永远不消失的高亮残影。
+const blurHandle = rows()[0].querySelector('.drag-handle');
+const blurRect = blurHandle.getBoundingClientRect();
+blurHandle.dispatchEvent(new PointerEvent('pointerdown', {
+  bubbles: true, cancelable: true, button: 0, pointerId: 31,
+  clientY: blurRect.top + blurRect.height / 2
+}));
+check('拖拽已经开始', rows()[0].classList.contains('dragging'));
+
+window.dispatchEvent(new Event('blur'));
+check('窗口失焦会取消拖拽', qa('.todo-row.dragging').length === 0);
+check('失焦取消之后没有留下落点提示', qa('.todo-row.drag-over').length === 0);
+
+const blurOrder = rowTexts();
+window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 31 }));
+await sleep(200);
+check('失焦取消之后松手不会重排', rowTexts().join('|') === blurOrder.join('|'));
+
 /* ---------- 删除与撤销 ---------- */
 
 const beforeDelete = rowTexts();
@@ -143,5 +164,66 @@ await expect('撤销条消失', () => q('#undoBar').hidden);
 check('任务行上没有「延续」角标', qa('.continue-badge').length === 0);
 check('底部没有快捷键提示', q('.tab-hint') === null);
 check('输入框的 maxlength 是 240', input.getAttribute('maxlength') === '240');
+
+/* ---------- 边界输入（验收清单 2.2 / 2.3） ---------- */
+
+const countBeforeBlank = rows().length;
+input.value = '   ';
+form.requestSubmit();
+await sleep(200);
+check('只输入空白不会添加任务', rows().length === countBeforeBlank, `${rows().length} 行`);
+// 应用有意**不**清空：没有东西可加，把用户刚敲的空格抹掉反而意外。
+check('空白提交后输入框保持原样', input.value === '   ', JSON.stringify(input.value));
+input.value = '';
+
+// maxlength 是浏览器在**用户编辑**时生效的，直接用 `.value =` 赋值绕不过去，
+// 所以走真实的编辑管线（execCommand），否则这条断言是假的。
+input.focus();
+input.value = '';
+document.execCommand('insertText', false, '字'.repeat(300));
+check('输入 300 个字符只会留下 240 个', input.value.length === 240, String(input.value.length));
+input.value = '';
+input.blur();
+
+/* ---------- 失焦提交（验收清单 2.7） ---------- */
+
+rows()[0].querySelector('.todo-text').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+await expect('进入编辑等待失焦', () => Boolean(rows()[0].querySelector('.edit-input')));
+const blurEditor = rows()[0].querySelector('.edit-input');
+blurEditor.value = '失焦时提交的内容';
+blurEditor.dispatchEvent(new FocusEvent('blur'));
+await expect('失去焦点视为提交', () => rowTexts()[0] === '失焦时提交的内容', () => rowTexts()[0]);
+
+/* ---------- 方向键移动焦点与游标式 tabindex（验收清单 2.11） ---------- */
+
+rows()[0].focus();
+press(rows()[0], 'ArrowDown');
+check('↓ 把焦点移到下一行', document.activeElement === rows()[1],
+  document.activeElement?.className ?? 'null');
+press(rows()[1], 'ArrowUp');
+check('↑ 把焦点移回上一行', document.activeElement === rows()[0],
+  document.activeElement?.className ?? 'null');
+
+const tabbable = rows().filter((row) => row.tabIndex === 0);
+check('同一时刻只有一行能被 Tab 命中', tabbable.length === 1, `${tabbable.length} 行`);
+check('能被 Tab 命中的就是当前焦点所在行', tabbable[0] === document.activeElement);
+
+/* ---------- 连续删除只保留最近一次撤销（验收清单 2.15） ---------- */
+
+const beforeTwoDeletes = rowTexts();
+press(rows()[0], 'Delete');
+await expect('第一次删除生效', () => rows().length === beforeTwoDeletes.length - 1);
+press(rows()[0], 'Delete');
+await expect('第二次删除生效', () => rows().length === beforeTwoDeletes.length - 2);
+
+q('#undoButton').click();
+await expect('撤销只恢复最近一次删除', () => rows().length === beforeTwoDeletes.length - 1,
+  () => `${rows().length} 行`);
+check('恢复的是第二次删掉的那条', rowTexts().includes(beforeTwoDeletes[1]), rowTexts()[0]);
+check('第一次删掉的那条没有被恢复', !rowTexts().includes(beforeTwoDeletes[0]));
+
+// 恢复的位置是「删除它时它所在的位置」，不是它最初的位置：
+// 第一次删除让第二条前移到了 index 0，所以第二次删除记录的下标就是 0。
+check('恢复到删除时所在的位置（此时是第一位）', rowTexts()[0] === beforeTwoDeletes[1], rowTexts()[0]);
 
 return results;

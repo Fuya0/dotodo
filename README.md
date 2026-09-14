@@ -158,7 +158,7 @@ build/                       只用于构建的资源（应用图标 SVG）
 npm start            # 开发运行
 npm test             # 全部测试（180+ 条断言，实际数字跑一次就知道）
 npm run smoke        # 真实 Electron 冒烟测试，使用隔离的临时数据目录
-npm run ui-check     # 在真实渲染进程里重放交互（11 个场景 / 251 条断言），每个场景留一张截图
+npm run ui-check     # 在真实渲染进程里重放交互（12 个场景 / 288 条断言），每个场景留一张截图
 npm run icons        # 重新生成托盘图标
 npm run shot         # 把界面渲染成 PNG：可指定底色、页面、窗口尺寸，还能先跑一段脚本再截
 npm run paths        # 打印应用实际使用的数据目录与状态文件路径

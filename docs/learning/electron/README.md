@@ -115,7 +115,7 @@ npm start
 | --- | --- |
 | 解决什么 | 怎么知道自己做对了；出事后用户怎么找回数据；怎么让界面行为也能被自动重放 |
 | 源文件 | `tools/verify-electron.ps1`、`tools/run-smoke.js`、`tools/ui-check.js`、`test/ui/*`、`docs/testing/electron-windows-manual-checklist.md` |
-| 测试 | `test/electron/ipc.test.js`（20 个）+ 交互场景 11 个 / 251 条断言 |
+| 测试 | `test/electron/ipc.test.js`（20 个）+ 交互场景 12 个 / 288 条断言 |
 | JavaScript 要点 | 错误码分类、字节格式化、reduce 汇总、测试替身、隔离目录、轮询判定、几何断言、集合差异 |
 | 关键结论 | 单元 / 集成 / 静态约束 / 冒烟 / 交互 / 人工 各证明一件事；自动化通过 ≠ 可以发布 |
 
@@ -147,7 +147,7 @@ npm start
 npm start            # 开发运行
 npm test             # 全部单元与集成测试（180+ 条断言）
 npm run smoke        # 真实 Electron 冒烟测试（隔离数据目录）
-npm run ui-check     # 在真实渲染进程里重放交互并断言 DOM（11 个场景），每个场景留一张截图
+npm run ui-check     # 在真实渲染进程里重放交互并断言 DOM（12 个场景），每个场景留一张截图
 npm run icons        # 重新生成托盘图标位图
 npm run shot         # 把界面渲染成 PNG：可指定底色、页面、窗口尺寸，还能先跑一段脚本再截
 npm run paths        # 打印应用实际使用的数据目录与状态文件路径

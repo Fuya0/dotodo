@@ -74,6 +74,13 @@ check('标题栏和内容区都不带整体透明度',
 check('外壳有圆角', parseFloat(getComputedStyle(q('.app-shell')).borderTopLeftRadius) > 0,
   getComputedStyle(q('.app-shell')).borderTopLeftRadius);
 
+// 深色壁纸下卡片和背景都是暗的，界限只能靠这圈描边。所以要断言它真的存在且有颜色。
+const shellStyle = getComputedStyle(q('.app-shell'));
+check('外壳有 1px 描边', parseFloat(shellStyle.borderTopWidth) >= 1, shellStyle.borderTopWidth);
+const borderColor = parseColor(shellStyle.borderTopColor);
+check('描边不是全透明（深色壁纸上仍能看出边界）',
+  borderColor !== null && borderColor.a > 0.05, `alpha=${borderColor?.a}`);
+
 /* ---------- 文字对比度：正文与次要文字都要过 AA ---------- */
 
 const samples = [

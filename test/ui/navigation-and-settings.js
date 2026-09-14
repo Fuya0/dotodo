@@ -28,6 +28,15 @@ const historyRows = qa('.history-row');
 check('历史行渲染出来了', historyRows.length === 3, `实际 ${historyRows.length}`);
 check('历史行是只读的：没有勾选按钮', qa('.history-row .check-button').length === 0);
 check('历史行没有双击编辑入口', qa('.history-row .edit-input').length === 0);
+
+// 「没有编辑入口」是一种静态断言；这里再验一次行为：真的双击了也不会变成输入框。
+const historyTextNode = qa('.history-row .todo-text')[0];
+const historyTextBefore = historyTextNode.textContent;
+historyTextNode.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+await sleep(250);
+check('双击历史任务不会进入编辑', qa('.history-row .edit-input').length === 0);
+check('双击历史任务的文字没有被改动',
+  qa('.history-row .todo-text')[0].textContent === historyTextBefore);
 check('未完成的历史任务有「延续到今天」按钮', qa('.history-row .text-button').length === 1,
   `实际 ${qa('.history-row .text-button').length}`);
 check('已完成的历史任务没有延续按钮', qa('.history-row.completed .text-button').length === 0);
@@ -72,5 +81,18 @@ check('标题栏有关闭按钮', q('#closeButton') !== null);
 check('层级按钮的提示语含当前层级',
   (q('#layerButton').getAttribute('aria-label') ?? '').includes('置顶'),
   q('#layerButton').getAttribute('aria-label'));
+
+/* ---------- 历史任务可删除并撤销（验收清单 3.3） ---------- */
+
+const historyCountBefore = qa('.history-row').length;
+qa('.history-row .delete-button')[0].click();
+await expect('历史任务被删除', () => qa('.history-row').length === historyCountBefore - 1,
+  () => `${qa('.history-row').length} 行`);
+await expect('删除历史任务后撤销条出现', () => !q('#undoBar').hidden);
+
+q('#undoButton').click();
+await expect('撤销后历史任务恢复', () => qa('.history-row').length === historyCountBefore,
+  () => `${qa('.history-row').length} 行`);
+check('恢复后历史行仍然是只读的', qa('.history-row .check-button').length === 0);
 
 return results;
