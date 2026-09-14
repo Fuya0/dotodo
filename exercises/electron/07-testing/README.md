@@ -6,9 +6,13 @@
 
 这些东西的价值全在于**判断的准确性**——统计错一个数字、恢复时挑错文件、冒烟测试写到真实数据目录，都会让人得出错误结论。你要写的 6 个函数就是这些判断本身，它们不碰文件系统，所以可以在 Node 里穷举。
 
+后 6 题来自 `npm run ui-check` 那套交互场景运行器。它同样是一堆判断：哪些文件算场景、
+怎么从混杂输出里取出结果、多少条断言算通过、超时怎么算、界面元素有没有压到别人身上、
+数据目录里该出现什么。**其中 `isScenarioFile` 就是我当时写错的那个判断。**
+
 ## 使用方法
 
-打开 `starter.js`，把 6 个占位函数实现完，然后运行：
+打开 `starter.js`，把 **12 个占位函数**实现完，然后运行：
 
 ```powershell
 node exercises/electron/07-testing/starter.test.js
@@ -110,6 +114,82 @@ countByExtension(['README', '.gitignore', 'a.dll'])    → { 'no-extension': 2, 
 - 只统计字符串条目，非字符串跳过；
 - 非数组输入返回 `{}`。
 
+### 7. `isScenarioFile(name)`
+
+运行器要在 `test/ui/` 里挑出「渲染进程场景」，同时排除两类干扰文件。判断规则：
+
+| 情况 | 结果 |
+| --- | --- |
+| 以 `.js` 结尾，且不是下面两种 | `true` |
+| 以 `_` 开头（`_prelude.js` 之类的公共前置） | `false` |
+| 以 `.case.js` 结尾（Node 侧配对文件） | `false` |
+| 没有文件名，只有扩展名（`.js`） | `false` |
+| 扩展名不是小写 `.js`（比如 `.JS`） | `false` |
+| 不是字符串 | `false` |
+
+注意 `case.js` 是**合法场景名**——它不以 `.case.js` 结尾。这一题就是我当时写错的地方：
+只判断了「以 .js 结尾」，结果把 Node 侧文件也当成场景丢进渲染进程执行，
+报出来的错和真正的原因毫无关系。
+
+### 8. `extractDriveResult(stdout)`
+
+从 Electron 的一大堆输出里，把场景结果取出来。
+
+- 找到第一行以 `DOTODO_DRIVE_RESULT ` 开头的内容，把后面那段按 JSON 解析；
+- 没有这一行、后面是空、或不是合法 JSON → 返回 `null`；
+- **`[]` 是合法结果**：一个断言都没写的场景返回空数组，不能和"没收到结果"混为一谈；
+- 有多个标记时只取第一条；
+- 输入不是字符串 → `null`。
+
+### 9. `summarizeScenarios(results)`
+
+`results` 是 `[{ name, checks: [{ passed }], error? }]`。返回：
+
+```js
+{ scenarios, assertions, passed, failed, broken, exitCode }
+```
+
+- `broken` 数的是 `error` 非空的场景（连跑都没跑起来）；
+- `exitCode` 在 `failed > 0` **或** `broken > 0` 时为 `1`，否则为 `0`；
+- 非数组输入按空数组处理。
+
+「没有断言但有错误」这种情况最容易写错：断言数是 0，但绝不能报通过。
+
+### 10. `withinDeadline(startedAt, now, timeoutMs)`
+
+等待循环的判定：还没到点就继续等。
+
+- `now - startedAt <= timeoutMs` 为 `true`；
+- **正好到点仍算在窗口内**（和实际循环里 `if (now > deadline) return false` 一致）；
+- 三个参数里任何一个不是有限数字（`NaN`、`Infinity`、字符串、缺失）→ `false`。
+
+### 11. `fitsInside(inner, outer, tolerance = 0)`
+
+判断一个矩形是否完全落在另一个矩形里。四个边都是 `top` / `left` / `right` / `bottom` 数字。
+
+- 贴边算在里面（`>=` 和 `<=`，不是严格不等号）；
+- 容差用来吸收亚像素误差：超出的距离不超过 `tolerance` 仍然算通过；
+- `inner` / `outer` 缺字段，或某个边不是有限数字 → `false`；
+- `tolerance` 不是有限数字 → `false`。
+
+这题守的是一个真实缺陷：提示条曾经压在页面标题上面。几何断言 `提示条.bottom <= 标题.top`
+比"看起来没问题"可靠得多。
+
+### 12. `diffFileNames(before, after)`
+
+比较两个目录的文件名列表，返回：
+
+```js
+{ added: [...], removed: [...], kept: [...] }
+```
+
+- 用集合语义：**重复名字只算一次**（恢复文件可能被保留不止一份）；
+- 三个数组都按字典序排序，保证输出确定；
+- 任一参数不是数组时按空数组处理。
+
+用途是检查"应用有没有在数据目录里留下该留的东西"——比如损坏恢复之后，
+`state.json` 变了、多出一个 `recovery-primary-*.json`，而备份不见了。
+
 ## 代码阅读题
 
 打开 `tools/verify-electron.ps1` 和 `src/infrastructure/json-state-store.js`，回答：
@@ -127,3 +207,8 @@ countByExtension(['README', '.gitignore', 'a.dll'])    → { 'no-extension': 2, 
 3. 什么样的验证结果算「通过」？只看退出码够不够？
 4. 「文件损坏了」和「文件损坏了，原文件已保留在 `C:\...`」对用户的实际差别是什么？
 5. 如果打包目录从 480 MB 变成 700 MB，你会先看哪几个分类的数字？
+6. 交互场景的断言为什么必须「等条件成立」而不是「等固定的毫秒数」？后者在快机器和慢机器上各会出什么问题？
+7. `verify` 钩子是在应用退出**之后**跑的，它看到的是最终状态。如果场景中途改了数据，断言要注意什么？（提示：我在这上面连错三次。）
+8. 几何断言（`提示条.bottom <= 标题.top`）比"我看了一眼没问题"可靠在哪里？它不能替代什么？
+9. 场景文件本身也需要静态守卫（必须以 `return results;` 结尾、不能 `require`）。为什么值得为"测试代码"再写测试？
+10. 一个场景跑完会留一张截图。这在断言失败时有什么用？为什么断言全绿时它仍然有价值？

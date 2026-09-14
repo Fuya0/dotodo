@@ -73,6 +73,103 @@ module.exports = {
 如果场景中间改了数据，断言就必须按最终状态写。我在这上面连错三次——
 每次都以为是产品 bug，其实是我在场景末尾加了任务却在断言里按原始条数算。
 
+## 动手：把运行器拆成可以纯函数测试的部分
+
+运行器看起来全是"和 Electron 打交道"的代码，其实里面一半是普通判断。把它们抽出来，
+就能用 `node --test` 秒级验证，不用启动浏览器。
+
+```powershell
+node exercises/electron/07-testing/starter.test.js
+```
+
+| 题目 | 它在运行器里管什么 |
+| --- | --- |
+| `isScenarioFile` | 从 `test/ui/` 里挑出真正的场景，排除 `_prelude.js` 和 `*.case.js` |
+| `extractDriveResult` | 从 Electron 的一大堆输出里取出 JSON 结果 |
+| `summarizeScenarios` | 汇总断言数与失败数，并算出退出码 |
+| `withinDeadline` | 等待循环什么时候该放弃 |
+| `fitsInside` | 界面元素有没有压到别人身上 |
+| `diffFileNames` | 数据目录里多了什么、少了什么 |
+
+### 为什么这些判断值得单独测
+
+`isScenarioFile` 就是反例：它一开始只判断了「以 `.js` 结尾」，于是把 Node 侧的
+`*.case.js` 也当成场景丢进渲染进程执行。报出来的错是「选择器找不到元素」，
+和真正的原因（文件根本不是场景）差了十万八千里，排查绕了一大圈。
+
+正确的规则是三条一起：
+
+```js
+typeof name === 'string' && name.length > 3 &&
+name.endsWith('.js') && !name.startsWith('_') && !name.endsWith('.case.js')
+```
+
+`name.length > 3` 那条容易被忽略：`'.js'` 满足「以 .js 结尾」，但它不是文件名。
+**边界条件不是想出来的，是写测试写出来的。**
+
+### 等待循环：为什么"等条件"比"等时间"难写
+
+```js
+async function waitFor(predicate, timeout = 4000) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    try {
+      if (predicate()) return true;
+    } catch {
+      // 元素还没出现时 predicate 可能抛错，当作"还没到"
+    }
+    if (Date.now() > deadline) return false;
+    await sleep(25);
+  }
+}
+```
+
+四件事各自都能写错：
+
+1. **`try/catch` 包住 predicate。** 你想判断的元素可能还不存在，`q('#x').hidden` 会直接抛。
+   不包起来，第一次轮询就把整个场景炸掉。
+2. **先判断再检查超时。** 如果顺序反过来，一个立刻为真的条件也要白等一个间隔。
+3. **`>` 而不是 `>=`。** 正好到点仍算在窗口内——这是一条要写进测试的约定，不然
+   不同人的实现会在边界上不一致。
+4. **固定间隔 25ms，不做退避。** 界面变化通常在几十毫秒内，退避只会让常见情况变慢。
+
+`withinDeadline(startedAt, now, timeoutMs)` 就是把第 3 条抽出来：
+把时间当参数传进去，测试就能直接钉住"正好到点"和"超过一毫秒"两个边界，不用真的等。
+
+### 几何断言：把"我看了一眼"变成可执行的
+
+提示条压住标题那个缺陷，肉眼一看就知道。问题是**下次改动时没人会再看一眼**。
+所以把它写成数字：
+
+```js
+const bandRect = band.getBoundingClientRect();
+const headingRect = q('#todayPage .hero h1').getBoundingClientRect();
+check('提示条不遮挡页面标题', bandRect.bottom <= headingRect.top + 1);
+```
+
+`+1` 是容差，用来吸收亚像素取整。`fitsInside(inner, outer, tolerance)` 就是这条断言的
+通用版本，同时也用于"提示条没有超出窗口宽度"。
+
+几何断言能守住"不重叠""不溢出""不超过视口多少比例"，守不住"好不好看"。
+分清楚这个界线，就不会写出假装能测视觉的测试。
+
+### 数据目录的差异断言
+
+损坏恢复之后，数据目录里应该发生这些变化：
+
+```text
++ recovery-primary-2026-....json     新增：坏文件被保留
+  state.json                          内容变了（从备份恢复）
+  state.backup.json                   内容变了（轮转）
+```
+
+`diffFileNames(before, after)` 用来表达"新增/删除/保留"这三件事。
+用**集合**而不是计数：坏备份可能被保留不止一份（`load()` 一次、`save()` 轮转时又一次），
+所以断言应该是「每一份保留文件都一字不差」，而不是「只保留一份」。
+
+**这就是"断言要描述真正的保证"**：写成计数会在实现变化时假失败，
+写成集合语义才对应产品真正承诺的东西。
+
 ## 冒烟测试为什么要隔离数据目录
 
 ```js

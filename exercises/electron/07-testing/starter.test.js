@@ -6,7 +6,13 @@ const {
   formatBytes,
   chooseRecoverySource,
   buildSmokeEnvironment,
-  countByExtension
+  countByExtension,
+  isScenarioFile,
+  extractDriveResult,
+  summarizeScenarios,
+  withinDeadline,
+  fitsInside,
+  diffFileNames
 } = require('./starter');
 
 /* ---------- 1. classifyFileError ---------- */
@@ -180,4 +186,161 @@ test('countByExtension 对空输入和非数组返回空对象', () => {
   assert.deepEqual(countByExtension([]), {});
   assert.deepEqual(countByExtension(null), {});
   assert.deepEqual(countByExtension(['a', 42, null]), { 'no-extension': 1 });
+});
+
+/* ---------- 7. isScenarioFile ---------- */
+
+test('isScenarioFile 只认渲染进程场景', () => {
+  assert.equal(isScenarioFile('today.js'), true);
+  assert.equal(isScenarioFile('navigation-and-settings.js'), true);
+  // 名字以 case.js 结尾，但不是 *.case.js 配对文件。
+  assert.equal(isScenarioFile('case.js'), true);
+});
+
+test('isScenarioFile 排除前置代码和 Node 侧配对文件', () => {
+  assert.equal(isScenarioFile('_prelude.js'), false);
+  assert.equal(isScenarioFile('today.case.js'), false);
+  assert.equal(isScenarioFile('rollover.case.js'), false);
+  assert.equal(isScenarioFile('_x.case.js'), false);
+});
+
+test('isScenarioFile 对没有文件名、错大小写和非字符串说不是', () => {
+  assert.equal(isScenarioFile('.js'), false, '只有扩展名不算文件名');
+  assert.equal(isScenarioFile('README.md'), false);
+  assert.equal(isScenarioFile('today.JS'), false, '扩展名大小写敏感');
+  assert.equal(isScenarioFile(undefined), false);
+  assert.equal(isScenarioFile(42), false);
+});
+
+/* ---------- 8. extractDriveResult ---------- */
+
+test('extractDriveResult 从混杂输出里取出结果', () => {
+  const stdout = [
+    'some noise from electron',
+    'DOTODO_SMOKE_READY',
+    'DOTODO_DRIVE_RESULT [{"name":"a","passed":true}]',
+    '截图已写入 F:\\shots\\today.png'
+  ].join('\n');
+  assert.deepEqual(extractDriveResult(stdout), [{ name: 'a', passed: true }]);
+
+  assert.deepEqual(extractDriveResult('DOTODO_DRIVE_RESULT {"scenarios":2}'), { scenarios: 2 });
+});
+
+test('extractDriveResult 只取第一条结果', () => {
+  const stdout = 'DOTODO_DRIVE_RESULT [1]\nDOTODO_DRIVE_RESULT [2]';
+  assert.deepEqual(extractDriveResult(stdout), [1]);
+});
+
+test('extractDriveResult 对缺失或损坏的标记返回 null', () => {
+  assert.equal(extractDriveResult('nothing here'), null);
+  assert.equal(extractDriveResult('DOTODO_DRIVE_RESULT '), null);
+  assert.equal(extractDriveResult('DOTODO_DRIVE_RESULT {not json}'), null);
+  assert.equal(extractDriveResult(''), null);
+  assert.equal(extractDriveResult(null), null);
+  assert.equal(extractDriveResult(undefined), null);
+});
+
+test('extractDriveResult 不会把空数组当成失败', () => {
+  // 一个断言都没有的场景返回的是 []，那是合法结果，不是"没收到"。
+  assert.deepEqual(extractDriveResult('DOTODO_DRIVE_RESULT []'), []);
+});
+
+/* ---------- 9. summarizeScenarios ---------- */
+
+test('summarizeScenarios 汇总场景与断言，并给出退出码', () => {
+  assert.deepEqual(summarizeScenarios([
+    { name: 'a', checks: [{ passed: true }, { passed: true }] },
+    { name: 'b', checks: [{ passed: true }, { passed: false }] },
+    { name: 'c', checks: [], error: '跑不起来' }
+  ]), {
+    scenarios: 3, assertions: 4, passed: 3, failed: 1, broken: 1, exitCode: 1
+  });
+});
+
+test('summarizeScenarios 全绿时退出码为 0', () => {
+  assert.deepEqual(summarizeScenarios([
+    { name: 'a', checks: [{ passed: true }] }
+  ]), {
+    scenarios: 1, assertions: 1, passed: 1, failed: 0, broken: 0, exitCode: 0
+  });
+});
+
+test('summarizeScenarios 对空输入和非数组返回全零', () => {
+  const empty = { scenarios: 0, assertions: 0, passed: 0, failed: 0, broken: 0, exitCode: 0 };
+  assert.deepEqual(summarizeScenarios([]), empty);
+  assert.deepEqual(summarizeScenarios(null), empty);
+  assert.deepEqual(summarizeScenarios(undefined), empty);
+});
+
+test('summarizeScenarios 在没有断言但有错误时仍然算失败', () => {
+  // 场景连跑都没跑起来：断言数是 0，但绝不能报"通过"。
+  assert.deepEqual(summarizeScenarios([{ name: 'a', checks: [], error: '超时' }]), {
+    scenarios: 1, assertions: 0, passed: 0, failed: 0, broken: 1, exitCode: 1
+  });
+});
+
+/* ---------- 10. withinDeadline ---------- */
+
+test('withinDeadline 把到期时刻算作还没超时', () => {
+  assert.equal(withinDeadline(0, 0, 100), true);
+  assert.equal(withinDeadline(0, 99, 100), true);
+  assert.equal(withinDeadline(0, 100, 100), true, '正好到点仍算在窗口内');
+  assert.equal(withinDeadline(0, 101, 100), false);
+});
+
+test('withinDeadline 对非有限数字一概说超时', () => {
+  assert.equal(withinDeadline(0, Number.NaN, 100), false);
+  assert.equal(withinDeadline(0, 10, Number.POSITIVE_INFINITY), false);
+  assert.equal(withinDeadline('0', 10, 100), false);
+  assert.equal(withinDeadline(0, undefined, 100), false);
+});
+
+/* ---------- 11. fitsInside ---------- */
+
+test('fitsInside 判断内框是否完全落在外框里', () => {
+  const outer = { top: 0, left: 0, right: 378, bottom: 640 };
+  assert.equal(fitsInside({ top: 7, left: 7, right: 371, bottom: 60 }, outer), true);
+  assert.equal(fitsInside(outer, outer), true, '刚好贴边也算在里面');
+  assert.equal(fitsInside({ top: 7, left: 7, right: 400, bottom: 60 }, outer), false, '右边超了');
+  assert.equal(fitsInside({ top: -1, left: 7, right: 371, bottom: 60 }, outer), false, '上面超了');
+});
+
+test('fitsInside 的容差用来吸收亚像素误差', () => {
+  const outer = { top: 0, left: 0, right: 378, bottom: 640 };
+  const slightlyOut = { top: 7, left: 7, right: 380, bottom: 60 };
+  assert.equal(fitsInside(slightlyOut, outer), false);
+  assert.equal(fitsInside(slightlyOut, outer, 4), true);
+  assert.equal(fitsInside(slightlyOut, outer, 1), false);
+});
+
+test('fitsInside 对缺字段或非数字返回 false', () => {
+  const outer = { top: 0, left: 0, right: 378, bottom: 640 };
+  assert.equal(fitsInside({}, outer), false);
+  assert.equal(fitsInside({ top: 0, left: 0, right: 10 }, outer), false);
+  assert.equal(fitsInside({ top: 0, left: 0, right: '10', bottom: 10 }, outer), false);
+  assert.equal(fitsInside(null, outer), false);
+  assert.equal(fitsInside({ top: 0, left: 0, right: 1, bottom: 1 }, null), false);
+});
+
+/* ---------- 12. diffFileNames ---------- */
+
+test('diffFileNames 分出新增、删除和保留的文件', () => {
+  assert.deepEqual(diffFileNames(['a', 'b'], ['b', 'c']), {
+    added: ['c'],
+    removed: ['a'],
+    kept: ['b']
+  });
+});
+
+test('diffFileNames 去重、排序，并对非数组返回空结果', () => {
+  // 恢复文件可能被保留不止一份，所以去重比计次更重要。
+  assert.deepEqual(diffFileNames(['b', 'a', 'a'], ['b', 'b', 'z']), {
+    added: ['z'],
+    removed: ['a'],
+    kept: ['b']
+  });
+  const empty = { added: [], removed: [], kept: [] };
+  assert.deepEqual(diffFileNames([], []), empty);
+  assert.deepEqual(diffFileNames(null, ['a']), { added: ['a'], removed: [], kept: [] });
+  assert.deepEqual(diffFileNames(['a'], undefined), { added: [], removed: ['a'], kept: [] });
 });

@@ -42,7 +42,7 @@ npm start
 | [04](04-browser-window-and-glass-ui.md) | 透明窗口、深色玻璃与 DOM 投影 | 60 min | 6 题 | `node exercises/electron/04-renderer/starter.test.js` |
 | [05](05-state-driven-interactions.md) | 状态驱动的交互：历史、撤销、拖拽、设置 | 75 min | 6 题 | `node exercises/electron/05-interactions/starter.test.js` |
 | [06](06-native-shell.md) | 托盘、全局快捷键、窗口层级、开机启动 | 70 min | 6 题 | `node exercises/electron/06-native-shell/starter.test.js` |
-| [07](07-debug-test-verify.md) | 导入导出、数据恢复与验证工作流 | 45 min | 6 题 | `node exercises/electron/07-testing/starter.test.js` |
+| [07](07-debug-test-verify.md) | 导入导出、数据恢复与验证工作流 | 45 min | 12 题 | `node exercises/electron/07-testing/starter.test.js` |
 | [08](08-build-and-release.md) | 仓库整理、课程索引与构建配置 | 40 min | 6 题 | `node exercises/electron/08-build-and-release/starter.test.js` |
 | [09](09-packaging-and-signing.md) | 打包、签名与跨平台发布 | 40 min | — | — |
 | [附录](appendix-desktop-stack-and-packaging.md) | 桌面技术栈对比、体积与发布格式 | 20 min | — | — |
@@ -113,11 +113,11 @@ npm start
 
 | | |
 | --- | --- |
-| 解决什么 | 怎么知道自己做对了；出事后用户怎么找回数据 |
-| 源文件 | `tools/verify-electron.ps1`、`tools/run-smoke.js`、`docs/testing/electron-windows-manual-checklist.md` |
-| 测试 | `test/electron/ipc.test.js`（20 个） |
-| JavaScript 要点 | 错误码分类、字节格式化、reduce 汇总、测试替身、隔离目录 |
-| 关键结论 | 单元 / 集成 / 冒烟 / 人工验收各证明一件事；自动化通过 ≠ 可以发布 |
+| 解决什么 | 怎么知道自己做对了；出事后用户怎么找回数据；怎么让界面行为也能被自动重放 |
+| 源文件 | `tools/verify-electron.ps1`、`tools/run-smoke.js`、`tools/ui-check.js`、`test/ui/*`、`docs/testing/electron-windows-manual-checklist.md` |
+| 测试 | `test/electron/ipc.test.js`（20 个）+ 交互场景 8 个 / 187 条断言 |
+| JavaScript 要点 | 错误码分类、字节格式化、reduce 汇总、测试替身、隔离目录、轮询判定、几何断言、集合差异 |
+| 关键结论 | 单元 / 集成 / 静态约束 / 冒烟 / 交互 / 人工 各证明一件事；自动化通过 ≠ 可以发布 |
 
 ### 第 8 课：仓库与构建
 
@@ -145,7 +145,7 @@ npm start
 
 ```powershell
 npm start            # 开发运行
-npm test             # 全部单元与集成测试（160 条断言）
+npm test             # 全部单元与集成测试（169 条断言）
 npm run smoke        # 真实 Electron 冒烟测试（隔离数据目录）
 npm run ui-check     # 在真实渲染进程里重放交互并断言 DOM（8 个场景），每个场景留一张截图
 npm run icons        # 重新生成托盘图标位图
