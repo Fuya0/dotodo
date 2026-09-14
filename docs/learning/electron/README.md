@@ -145,7 +145,7 @@ npm start
 
 ```powershell
 npm start            # 开发运行
-npm test             # 全部单元与集成测试（181 条断言）
+npm test             # 全部单元与集成测试（180+ 条断言）
 npm run smoke        # 真实 Electron 冒烟测试（隔离数据目录）
 npm run ui-check     # 在真实渲染进程里重放交互并断言 DOM（9 个场景），每个场景留一张截图
 npm run icons        # 重新生成托盘图标位图
