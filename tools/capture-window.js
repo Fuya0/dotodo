@@ -113,11 +113,26 @@ const page = readArgument('page', 'today');
 // 默认跑源码（electron .）；传 --executable 可以截打包后的真实产物，
 // 用来验证 asar 里的资源路径（托盘图标、renderer 页面）在分发形态下依然能解析。
 const executable = readArgument('executable', null);
+// 传 --drive=<脚本> 可以先在渲染进程里做一串操作再截图。
+// 截图是**做完之后**的状态，所以想看「设置面板打开的样子」就让它保持打开。
+const driveSource = readArgument('drive', null);
+// 传 --size=720x900 用别的窗口尺寸截图。应用可缩放到 330–720 × 420–900，
+// 布局问题往往只在宽窗口下才看得出来。
+const size = readArgument('size', null);
 const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'dotodo-shot-'));
 
 // 演示数据必须先过状态校验。否则应用会把整份状态当成"损坏"移到 recovery，
 // 截图里只会看到一个巨大的红色警告条——排查半天才发现是截图脚本自己的锅。
 const demoState = buildDemoState();
+if (size) {
+  const [width, height] = size.split('x').map(Number);
+  if (Number.isFinite(width) && Number.isFinite(height)) {
+    demoState.windowBounds = { width, height };
+  } else {
+    console.error(`--size 应该写成 720x900 这样，收到的是 ${size}`);
+    process.exit(1);
+  }
+}
 const demoValidation = require('../src/domain/state-schema').validateState(demoState);
 if (!demoValidation.ok) {
   console.error(`演示数据无效：${demoValidation.error}`);
@@ -142,7 +157,8 @@ const child = spawn(
     '--smoke-test',
     `--capture=${outputPath}`,
     `--capture-backdrop=${backdrop}`,
-    ...(page === 'today' ? [] : [`--capture-page=${page}`])
+    ...(page === 'today' ? [] : [`--capture-page=${page}`]),
+    ...(driveSource ? [`--drive=${path.resolve(driveSource)}`] : [])
   ],
   {
     cwd: projectDirectory,
