@@ -2,7 +2,11 @@ const DEFAULT_SETTINGS = Object.freeze({
   // 遗留字段：背景透明度现在是固定的视觉常量（见 src/renderer/styles.css），
   // 界面和 IPC 都不再暴露它。保留是为了让老存档照常通过校验，不需要升级 schemaVersion。
   backgroundOpacity: 0.82,
-  windowMode: 'topmost',
+  // 遗留字段：窗口层级（normal / topmost / desktop）整套删掉了。
+  // 它本来就是个多余的概念 —— 用户得先学会三种层级才能选，而实际想要的
+  // 只是"一个常驻桌面的小部件"。现在窗口固定为不置顶 + 不进任务栏（见
+  // src/electron/window-controller.js）。这个字段同样只为老存档保留。
+  windowMode: 'desktop',
   closeToTray: true,
   launchAtLogin: false
 });
@@ -77,6 +81,8 @@ function validateState(value) {
   }
 
   const settings = value.settings;
+  // backgroundOpacity 与 windowMode 都是遗留字段：界面和 IPC 不再暴露它们，
+  // 但老存档里带着这几个值，所以照样校验、照样放行。
   if (!settings || !Number.isFinite(settings.backgroundOpacity) ||
       settings.backgroundOpacity < 0.55 || settings.backgroundOpacity > 1 ||
       !['normal', 'topmost', 'desktop'].includes(settings.windowMode) ||

@@ -16,9 +16,7 @@ const EXPECTED_CHANNELS = [
   'history:continue-task',
   'history:delete-task',
   'settings:set-close-to-tray',
-  'settings:set-launch-at-login',
-  'settings:set-window-mode',
-  'state:get-snapshot',
+  'settings:set-launch-at-login',  'state:get-snapshot',
   'task:add',
   'task:delete-today',
   'task:edit',
@@ -75,7 +73,6 @@ function createHarness(overrides = {}) {
   };
   const shell = {
     openPath: async (...args) => { calls.push(['openPath', ...args]); return ''; },
-    setWindowMode: (...args) => calls.push(['setWindowMode', ...args]),
     setLaunchAtLogin: (...args) => calls.push(['setLaunchAtLogin', ...args]),
     minimize: () => calls.push(['minimize']),
     close: () => calls.push(['close']),
@@ -193,24 +190,14 @@ test('engine rejections are not marked as applied', async () => {
 
 test('settings reject coerced values and coordinate native effects', async () => {
   const harness = createHarness();
-  register(harness);
-
-  assert.equal((await invoke(harness, 'settings:set-window-mode', 'magic')).ok, false);
-  assert.equal((await invoke(harness, 'settings:set-close-to-tray', 1)).ok, false);
+  register(harness);  assert.equal((await invoke(harness, 'settings:set-close-to-tray', 1)).ok, false);
   assert.equal((await invoke(harness, 'settings:set-launch-at-login', 'yes')).ok, false);
-  assert.deepEqual(harness.calls, []);
-
-  await invoke(harness, 'settings:set-window-mode', 'topmost');
-  await invoke(harness, 'settings:set-close-to-tray', false);
+  assert.deepEqual(harness.calls, []);  await invoke(harness, 'settings:set-close-to-tray', false);
   await invoke(harness, 'settings:set-launch-at-login', true);
 
-  assert.deepEqual(harness.calls.filter(([name]) => name === 'updateSettings'), [
-    ['updateSettings', { windowMode: 'topmost' }],
-    ['updateSettings', { closeToTray: false }],
+  assert.deepEqual(harness.calls.filter(([name]) => name === 'updateSettings'), [    ['updateSettings', { closeToTray: false }],
     ['updateSettings', { launchAtLogin: true }]
-  ]);
-  assert.equal(harness.calls.some(([name, value]) => name === 'setWindowMode' && value === 'topmost'), true);
-  assert.equal(harness.calls.some(([name, value]) => name === 'setLaunchAtLogin' && value === true), true);
+  ]);  assert.equal(harness.calls.some(([name, value]) => name === 'setLaunchAtLogin' && value === true), true);
 });
 
 test('native setting failures return the authoritative snapshot without mutating settings', async () => {
@@ -246,36 +233,6 @@ test('failed settings commands do not refresh the native shell', async () => {
 
   assert.equal(result.ok, false);
   assert.equal(harness.calls.some(([name]) => name === 'syncSettings'), false);
-});
-
-test('desktop window mode is accepted and its platform caveat is not surfaced as a toast', async () => {
-  const harness = createHarness({
-    shell: { setWindowMode: () => ({ ok: true, mode: 'desktop', notice: '桌面层级是近似实现。' }) }
-  });
-  register(harness);
-
-  const result = await invoke(harness, 'settings:set-window-mode', 'desktop');
-
-  assert.equal(result.ok, true);
-  // 平台差异写在文档和课程里，不做成每次切换都弹的提示。
-  assert.equal(result.notice, undefined);
-  assert.deepEqual(harness.calls.filter(([name]) => name === 'updateSettings'), [
-    ['updateSettings', { windowMode: 'desktop' }]
-  ]);
-});
-
-test('a window mode the native layer rejects is never persisted', async () => {
-  const harness = createHarness({
-    shell: { setWindowMode: () => ({ ok: false, error: '窗口还没有创建，无法切换层级。' }) }
-  });
-  register(harness);
-
-  const result = await invoke(harness, 'settings:set-window-mode', 'topmost');
-
-  assert.equal(result.ok, false);
-  assert.match(result.error, /窗口/);
-  assert.deepEqual(result.snapshot, harness.snapshot);
-  assert.equal(harness.calls.some(([name]) => name === 'updateSettings'), false);
 });
 
 test('a login item the system rejects is never persisted', async () => {

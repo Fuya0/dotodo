@@ -1,42 +1,7 @@
 const GLOBAL_ACCELERATOR = 'CommandOrControl+Shift+Space';
 
 /**
- * 窗口层级适配器。
- *
- * `normal` 与 `topmost` 直接映射到 Electron 官方 API。`desktop` 没有等价 API：
- * Windows 上只能用「移出任务栏 + 不置顶」近似，macOS 连等价语义都没有。
- * 与其假装三端一致，这里明确返回一段 `notice`，让界面把差异讲清楚。
- */
-function createWindowModeAdapter({ platform = process.platform } = {}) {
-  return Object.freeze({
-    apply(window, mode) {
-      if (mode === 'normal') {
-        window.setAlwaysOnTop(false, 'normal');
-        window.setSkipTaskbar(false);
-        return { applied: 'normal', notice: null };
-      }
-      if (mode === 'topmost') {
-        window.setAlwaysOnTop(true, 'floating');
-        window.setSkipTaskbar(false);
-        return { applied: 'topmost', notice: null };
-      }
-      if (mode === 'desktop') {
-        window.setAlwaysOnTop(false, 'normal');
-        window.setSkipTaskbar(true);
-        return {
-          applied: 'desktop',
-          notice: platform === 'darwin'
-            ? 'macOS 没有与 Windows 等价的“钉在桌面”层级：DoTodo 只把窗口移出 Dock 与窗口切换器。'
-            : '桌面层级是近似实现：窗口不再出现在任务栏，但也不会固定在其他窗口之下。'
-        };
-      }
-      return null;
-    }
-  });
-}
-
-/**
- * 原生壳层控制器：托盘、全局快捷键、窗口层级、开机启动，以及关闭到托盘。
+ * 原生壳层控制器：托盘、全局快捷键、开机启动，以及关闭到托盘。
  *
  * 它只负责「让操作系统发生变化」，不负责持久化。托盘菜单里的设置变更通过
  * `onCommand` 交给组合根，由组合根决定要不要写盘、写失败要不要回滚。
@@ -52,8 +17,6 @@ function createShellController(options) {
     getSettings,
     onCommand = () => {},
     onError = () => {},
-    platform = process.platform,
-    windowModeAdapter = createWindowModeAdapter({ platform }),
     accelerator = GLOBAL_ACCELERATOR,
     tooltip = 'DoTodo'
   } = options ?? {};
@@ -125,12 +88,6 @@ function createShellController(options) {
       { label: '隐藏 DoTodo', click: hideWindow },
       { type: 'separator' },
       {
-        label: '窗口置顶',
-        type: 'checkbox',
-        checked: settings.windowMode === 'topmost',
-        click: (item) => runIntent({ type: 'window-mode', mode: item.checked ? 'topmost' : 'normal' })
-      },
-      {
         label: '关闭时隐藏到托盘',
         type: 'checkbox',
         checked: Boolean(settings.closeToTray),
@@ -156,16 +113,6 @@ function createShellController(options) {
       onError(error);
     }
     return intent;
-  }
-
-  function setWindowMode(mode) {
-    const window = getWindow();
-    if (!window || (typeof window.isDestroyed === 'function' && window.isDestroyed())) {
-      return { ok: false, error: '窗口还没有创建，无法切换层级。' };
-    }
-    const outcome = windowModeAdapter.apply(window, mode);
-    if (!outcome) return { ok: false, error: `未知窗口模式：${String(mode)}。` };
-    return { ok: true, mode: outcome.applied, notice: outcome.notice ?? null };
   }
 
   function setLaunchAtLogin(enabled) {
@@ -308,7 +255,6 @@ function createShellController(options) {
     initialize,
     bindWindow,
     refreshMenu,
-    setWindowMode,
     setLaunchAtLogin,
     showWindow,
     hideWindow,
@@ -342,4 +288,4 @@ function describeError(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-module.exports = { createShellController, createWindowModeAdapter, GLOBAL_ACCELERATOR };
+module.exports = { createShellController, GLOBAL_ACCELERATOR };

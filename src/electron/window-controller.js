@@ -3,7 +3,6 @@ function createWindowController({
   preloadPath,
   htmlPath,
   bounds,
-  windowMode = 'normal',
   onBoundsChanged,
   onError = () => {},
   schedule = setTimeout,
@@ -24,7 +23,12 @@ function createWindowController({
     transparent: true,
     backgroundColor: '#00000000',
     hasShadow: true,
-    alwaysOnTop: windowMode === 'topmost',
+    // 它是个常驻桌面的小部件，不是要参与窗口管理的应用：
+    // 不置顶（不和别的窗口抢位置），也不出现在任务栏里。
+    // 以前这里有 normal / topmost / desktop 三种层级可选，删掉了 ——
+    // 「层级」本身就是个多余的概念，用户还得先学会它才能选。
+    alwaysOnTop: false,
+    skipTaskbar: true,
     show: false,
     title: 'DoTodo',
     webPreferences: {

@@ -229,29 +229,18 @@ test('deriveHistoryView 拒绝结构不合法的快照', () => {
 
 /* ---------- Settings ---------- */
 
-test('deriveSettingsView 投影窗口层级与两个原生开关', () => {
+test('deriveSettingsView 只投影两个原生开关，窗口层级已经不存在', () => {
   const view = deriveSettingsView(makeSnapshot([]));
-  assert.equal(view.windowMode, 'topmost');
-  assert.deepEqual(view.windowModes, [
-    { value: 'normal', label: '普通', selected: false },
-    { value: 'topmost', label: '置顶', selected: true },
-    { value: 'desktop', label: '桌面', selected: false }
-  ]);
   assert.equal(view.closeToTray, true);
   assert.equal(view.launchAtLogin, false);
+  // 三种窗口层级（普通/置顶/桌面）整套删掉了：它是个多余的概念，
+  // 用户得先学会三种层级才能选，而实际想要的只是"常驻桌面的小部件"。
+  // 这条断言防的是有人把概念加回来时忘了同步投影。
+  assert.equal('windowMode' in view, false);
+  assert.equal('windowModes' in view, false);
   // 背景透明度是固定的视觉常量，不再是一项可由用户调整的设置。
   assert.equal('opacityPercent' in view, false);
   assert.equal('backgroundOpacity' in view, false);
-});
-
-test('deriveSettingsView 保留桌面模式，并在未知模式下回落到普通模式', () => {
-  const desktop = deriveSettingsView(makeHistorySnapshot([], { windowMode: 'desktop' }));
-  assert.equal(desktop.windowMode, 'desktop');
-  assert.deepEqual(desktop.windowModes.map((mode) => mode.selected), [false, false, true]);
-
-  const unknown = deriveSettingsView(makeHistorySnapshot([], { windowMode: 'floating-magic' }));
-  assert.equal(unknown.windowMode, 'normal');
-  assert.deepEqual(unknown.windowModes.map((mode) => mode.selected), [true, false, false]);
 });
 
 test('deriveSettingsView 把开关类设置强制成布尔值', () => {

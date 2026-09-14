@@ -17,10 +17,6 @@ function reconcileLaunchAtLogin(requested, effective) {
   throw new Error('请实现 reconcileLaunchAtLogin');
 }
 
-function describeWindowMode(platform, mode) {
-  throw new Error('请实现 describeWindowMode');
-}
-
 function formatShortcut(accelerator, platform) {
   throw new Error('请实现 formatShortcut');
 }
@@ -33,7 +29,6 @@ module.exports = {
   planTrayMenu,
   shouldHideOnClose,
   reconcileLaunchAtLogin,
-  describeWindowMode,
   formatShortcut,
   summarizeShellBoot
 };

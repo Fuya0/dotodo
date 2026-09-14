@@ -53,7 +53,6 @@ test('准备出来的数据是合法状态，而且真实的 store 读得回来'
     assert.equal(loaded.warning, null, `正常数据不该有警告：${loaded.warning}`);
     assert.equal(loaded.state.activeDay.tasks.length, 9);
     assert.equal(loaded.state.history.length, 1);
-    assert.equal(loaded.state.settings.windowMode, 'normal');
   });
 });
 

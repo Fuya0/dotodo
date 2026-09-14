@@ -1,4 +1,4 @@
-# 第 6 课：接入原生壳层——托盘、快捷键、窗口层级与开机启动
+# 第 6 课：接入原生壳层——托盘、快捷键与开机启动
 
 ## 本课完成了什么
 
@@ -8,7 +8,6 @@
 | --- | --- |
 | 托盘图标与菜单 | `Tray`、`Menu.buildFromTemplate` |
 | 全局显示/隐藏 | `globalShortcut.register` / `unregister` |
-| 三种窗口层级 | `BrowserWindow.setAlwaysOnTop`、`setSkipTaskbar` |
 | 开机启动 | `app.setLoginItemSettings` / `getLoginItemSettings` |
 | 关闭到托盘 | `BrowserWindow.on('close')` + `event.preventDefault()` |
 
@@ -17,10 +16,9 @@
 | 文件 | 改动 |
 | --- | --- |
 | `src/electron/shell-controller.js` | 新增。原生壳层的全部职责 |
-| `src/electron/window-mode.js` 中的适配器 | 合并在 shell-controller 里：`createWindowModeAdapter` |
 | `test/electron/shell-controller.test.js` | 新增。28 个注入替身测试 |
 | `src/main.js` | 组装壳层控制器，处理托盘意图，退出时处置资源 |
-| `src/electron/ipc.js` | `desktop` 模式放行、开机启动失败不落盘、写盘后再刷新托盘菜单 |
+| `src/electron/ipc.js` | 开机启动失败不落盘、写盘后再刷新托盘菜单 |
 | `src/renderer/*` | 设置面板增加两个开关与第三档层级，并把主进程的 `notice` 显示出来 |
 | `tools/make-tray-icon.js` | 新增。生成 `assets/tray.png` 与 `assets/tray@2x.png` |
 | `build/icon.svg` | 换成与界面品牌一致的青蓝图标 |
@@ -167,45 +165,50 @@ CommandOrControl+Shift+Space 已被其他程序占用；可以改用托盘菜单
 
 全局快捷键和窗口内快捷键是两回事：前者由系统分发、应用不在前台也生效，必须在主进程注册；后者是普通 DOM 键盘事件，留在渲染进程（第 4、5 课的那些 `keydown`）。
 
-## 窗口层级：不要假装三端一致
+## 窗口层级：一个做过又删掉的功能
 
-三种层级里只有两种有官方 API：
+这一节原本讲怎么把「普通 / 置顶 / 桌面」三种层级映射到原生 API，以及 `desktop` 在 Windows 上
+只能用「移出任务栏 + 不置顶」近似。现在三种层级**整套删掉了**。删掉的理由值得单独讲，
+因为它比实现更常见：
 
-```js
-if (mode === 'normal')  { window.setAlwaysOnTop(false, 'normal');  window.setSkipTaskbar(false); }
-if (mode === 'topmost') { window.setAlwaysOnTop(true, 'floating'); window.setSkipTaskbar(false); }
-if (mode === 'desktop') { window.setAlwaysOnTop(false, 'normal');  window.setSkipTaskbar(true);  }
-```
+**它是一个用户得先学会、才能做选择的概念。** 三种层级之间的差别要解释半天（"桌面"到底是
+什么？和"置顶"什么关系？），而用户真正想要的只有一句话：一个常驻桌面的小部件。
+把这句话变成三个选项，是让用户替产品做决定。
 
-`desktop`（钉在桌面上、被其他窗口盖住）在 Electron 里没有等价 API。可选的近似就是「移出任务栏 + 不置顶」，但它**不等于**真正的桌面层级。与其悄悄假装，不如让适配器把差异作为返回值交出来：
-
-```js
-return {
-  applied: 'desktop',
-  notice: platform === 'darwin'
-    ? 'macOS 没有与 Windows 等价的“钉在桌面”层级：DoTodo 只把窗口移出 Dock 与窗口切换器。'
-    : '桌面层级是近似实现：窗口不再出现在任务栏，但也不会固定在其他窗口之下。'
-};
-```
-
-**但这段 `notice` 不会显示在界面上。** 一开始的做法是把它转发给渲染进程，每次切到「桌面」
-就弹一条说明——结果就是用户每次切换都被念一遍同样的话。现在的处理是：
+**它没有官方 API，所以每一端都得近似。** 删除前 `desktop` 的实现是：
 
 ```js
-// ipc.js：故意不转发
-function afterNativeChange(result) {
-  if (result.ok !== true) return result;
-  if (typeof shell.syncSettings === 'function') shell.syncSettings(result.snapshot.settings);
-  return result;
-}
+window.setAlwaysOnTop(false, 'normal');
+window.setSkipTaskbar(true);
 ```
 
-适配器仍然诚实地返回差异（这是个真实事实，测试也在断言它），但它的去处是**文档**——
-README 的「平台状态」和 `docs/release/macos-release-checklist.md`——而不是一个反复弹的提示。
+它并没有真的把窗口钉到 Windows 桌面层（那需要原生 `SetParent` 到桌面窗口），macOS 上连
+等价语义都没有。也就是说：一个**本来就说不清楚、三端还不一致**的功能，被摆上了界面。
 
-这条规则可以推广：**平台差异属于文档，不属于每次操作都要看一遍的 toast。**
+**它把窗口的堆叠行为变成了持久化状态。** 层级要存进 `settings`、要跟着快照走、要有选中态、
+要在托盘菜单和设置面板两处同步——为了一个用户不需要选的选项。
 
-把平台差异做成**可替换的适配器**（`windowModeAdapter`）而不是一串 `if (platform === ...)`，是因为将来真的做了 Windows 原生 Z-order 扩展时，只需要换掉适配器，接口和测试都不用动。
+现在的做法是把结论写死在窗口创建处：
+
+```js
+// src/electron/window-controller.js
+alwaysOnTop: false,   // 不和别的窗口抢位置
+skipTaskbar: true,    // 不进任务栏：它是小部件，不是要管理的窗口
+```
+
+`settings.windowMode` 作为**历史字段**留在 schema 里，老存档照常加载，但界面和 IPC 都不再碰它。
+
+#### 可以带走的一条
+
+**"能不能做到"和"该不该让用户选"是两个问题。** 三种层级都能做出来（近似也能做），
+但做得出来不等于值得摆上界面。判断标准不是技术可行性，而是：**用户是不是必须理解一个新概念
+才能用这个产品？** 如果是，先怀疑这个功能，而不是先怀疑用户。
+
+这条规则在这里还有个更早的先例：背景透明度也曾经是滑杆，被删掉的原因是同一个——
+它把"文字能不能看清"变成了用户能调坏的设置项（见第 4 课）。
+
+> 平台差异仍然要如实说明，但它的去处是**文档**，不是每次操作都弹一遍的提示。
+> 这条规则在后面「开机启动」一节里还会用到。
 
 ## 开机启动：写进去不等于生效
 
@@ -273,11 +276,9 @@ npm start
 
 1. 任务栏右侧出现 DoTodo 图标，悬停显示 `DoTodo`，右键弹出菜单；
 2. 菜单里勾选「开机启动」，系统设置里也能看到对应项（失败时会弹提示，且勾选会弹回）；
-3. 菜单里切换「窗口置顶」，勾选状态与实际层级一致；
-4. 勾上「关闭时隐藏到托盘」后点标题栏关闭，窗口消失但进程还在，托盘图标仍可唤回；
-5. 按 `Ctrl/⌘ + Shift + Space` 切换显示/隐藏；
-6. 标题栏的层级按钮在「普通 → 置顶 → 桌面」之间循环，切到「桌面」时会显示一条说明；
-7. 托盘菜单点「退出」，进程真的结束（可以在任务管理器里确认没有残留）。
+3. 勾上「关闭时隐藏到托盘」后点标题栏关闭，窗口消失但进程还在，托盘图标仍可唤回；
+4. 按 `Ctrl/⌘ + Shift + Space` 切换显示/隐藏；
+5. 托盘菜单点「退出」，进程真的结束（可以在任务管理器里确认没有残留）。
 
 自动化：
 
@@ -296,7 +297,7 @@ npm run smoke
 - 托盘创建失败时仍然「关闭到托盘」，窗口再也调不出来；
 - 只处理托盘菜单的退出，漏掉 `before-quit`，导致任务栏退出失效；
 - 以为 `register()` 返回 `true` 就代表拿到了快捷键；
-- 把 `desktop` 层级说成和 Windows 原生一致；
+- 把近似实现说成和系统原生一致（例如"不进任务栏"不等于"钉在桌面层"）；
 - 写入开机启动后不读回，界面显示了一个没生效的开关；
 - 把「读不到系统状态」当成失败；
 - 先刷新托盘菜单再写盘，菜单显示旧值；
@@ -306,7 +307,7 @@ npm run smoke
 
 1. `test/electron/shell-controller.test.js` 的测试名：先看这个控制器承诺了什么；
 2. `src/electron/shell-controller.js` 的 `assertDependencies`：它需要哪些能力；
-3. `createWindowModeAdapter`：三档层级分别做了什么；
+3. `refreshMenu`：托盘菜单怎么从设置投影出勾选状态；
 4. `attachCloseHandler` / `attachBeforeQuitHandler`：关闭与退出的关系；
 5. `setLaunchAtLogin` / `readEffectiveLaunchAtLogin`：写入、读回、能力探测；
 6. `dispose()`：资源的释放顺序；

@@ -31,8 +31,6 @@ function defaultDataDirectory() {
 function prepareAcceptanceData(options = {}) {
   const dataDirectory = options.dataDirectory || defaultDataDirectory();
   const state = buildDemoState();
-  // 验收要试三种窗口层级，所以从"普通"开始，让用户自己往上切。
-  state.settings.windowMode = 'normal';
 
   const validation = validateState(state);
   if (!validation.ok) {

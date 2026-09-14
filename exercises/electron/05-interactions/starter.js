@@ -21,10 +21,6 @@ function summarizeHistory(days) {
   throw new Error('请实现 summarizeHistory');
 }
 
-function nextMode(modes, current) {
-  throw new Error('请实现 nextMode');
-}
-
 function reduceDrag(state, event) {
   throw new Error('请实现 reduceDrag');
 }
@@ -34,6 +30,5 @@ module.exports = {
   dropInstruction,
   undoWindow,
   summarizeHistory,
-  nextMode,
   reduceDrag
 };

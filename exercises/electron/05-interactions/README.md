@@ -37,7 +37,12 @@ node exercises/electron/05-interactions/starter.test.js
 ```
 
 - 指针越过第 `i` 个中点就落到下一个位置：第一个满足 `clientY < midpoints[i]` 的下标；
-- 越过最后一个中点则落到末尾（`midpoints.length - 1`）；
+- 越过最后一个中点则落到末尾（`midpoints.length`）；
+
+  注意是 `length` 而不是 `length - 1`：插入位置 `k` 的含义是「插到 `midpoints[k]` 之后那一行之前」，
+  而 `midpoints` 有 `length` 个元素，所以「插到最后」是 `length`。写 `length - 1` 会让被拖的行
+  走不到末尾 —— 而且索引 `length - 1` 上还有一行，落点提示会画在"倒数第二行之前"。
+  这个错误在真实项目里出现过一次，是一次人工验收发现的。
 - 空数组返回 `{ targetIndex: -1, changed: false }`；
 - `changed` 表示这次落点是否真的改变了位置。
 
@@ -66,15 +71,7 @@ node exercises/electron/05-interactions/starter.test.js
 
 一次性遍历完成，不要为了三四个统计值扫四遍数组。
 
-### 5. `nextMode(modes, current)`
-
-窗口层级按钮在模式之间循环。
-
-- 返回 `current` 的下一个模式，最后一个的下一个是第一个；
-- `current` 不在 `modes` 里时返回第一个模式；
-- `modes` 不是数组或为空时返回 `null`。
-
-### 6. `reduceDrag(state, event)`
+### 5. `reduceDrag(state, event)`
 
 手写一个小型状态机。`state` 只有两种形状：
 

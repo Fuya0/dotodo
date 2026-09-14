@@ -1,7 +1,5 @@
 const path = require('node:path');
 
-const WINDOW_MODES = Object.freeze(['normal', 'topmost', 'desktop']);
-
 const CHANNELS = Object.freeze({
   getSnapshot: 'state:get-snapshot',
   getStatus: 'app:get-status',
@@ -12,9 +10,7 @@ const CHANNELS = Object.freeze({
   deleteTodayTask: 'task:delete-today',
   deleteHistoryTask: 'history:delete-task',
   continueTask: 'history:continue-task',
-  undo: 'undo:apply',
-  setWindowMode: 'settings:set-window-mode',
-  setCloseToTray: 'settings:set-close-to-tray',
+  undo: 'undo:apply',  setCloseToTray: 'settings:set-close-to-tray',
   setLaunchAtLogin: 'settings:set-launch-at-login',
   importData: 'data:import',
   exportData: 'data:export',
@@ -115,23 +111,12 @@ function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareSt
    * 原生设置生效且成功落盘之后，才让壳层重建托盘菜单。
    * 顺序不能颠倒，否则菜单会显示成还没写盘的旧值。
    *
-   * 适配器可能回传一段平台差异说明（例如桌面层级只是近似实现）。这里**故意不转发**：
-   * 那段话写在 README 和课程里就够了，做成每次切换都弹的提示只会变成噪音。
    */
   function afterNativeChange(result) {
     if (result.ok !== true) return result;
     if (typeof shell.syncSettings === 'function') shell.syncSettings(result.snapshot.settings);
     return result;
-  }
-
-  handleState(CHANNELS.setWindowMode, async (_event, value) => {
-    if (!WINDOW_MODES.includes(value)) return invalidInput('窗口模式无效。');
-    const applied = await shell.setWindowMode(value);
-    if (applied && applied.ok === false) return failure(applied.error, engine.getSnapshot());
-    return afterNativeChange(runCommand(() => engine.updateSettings({ windowMode: value })));
-  });
-
-  handleState(CHANNELS.setCloseToTray, (_event, value) => {
+  }  handleState(CHANNELS.setCloseToTray, (_event, value) => {
     if (typeof value !== 'boolean') return invalidInput('关闭到托盘设置必须是布尔值。');
     return afterNativeChange(runCommand(() => engine.updateSettings({ closeToTray: value })));
   });

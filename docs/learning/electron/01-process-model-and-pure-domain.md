@@ -41,7 +41,7 @@
   history: [],
   settings: {
     backgroundOpacity: 0.82,
-    windowMode: 'topmost',
+    windowMode: 'desktop',   // 历史字段：层级功能已删除，见 docs/design-notes.md
     closeToTray: true,
     launchAtLogin: false
   },

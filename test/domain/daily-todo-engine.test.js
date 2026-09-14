@@ -216,6 +216,8 @@ test('completed or missing historical tasks cannot continue', () => {
 test('settings and window bounds update only through validated engine commands', () => {
   const engine = createEngine();
 
+  // backgroundOpacity 与 windowMode 是历史字段：界面和 IPC 都不再改它们，
+  // 但引擎仍然接受，老存档和手工补丁不会因为这两个键被拒。
   assert.equal(engine.updateSettings({ backgroundOpacity: 0.75 }).ok, true);
   assert.equal(engine.updateSettings({ windowMode: 'desktop', closeToTray: false }).ok, true);
   assert.equal(engine.updateWindowBounds({ x: 120, y: 80, width: 420, height: 640 }).ok, true);

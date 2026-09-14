@@ -115,9 +115,7 @@ function createAppWindow() {
     BrowserWindow,
     preloadPath: path.join(__dirname, 'preload.js'),
     htmlPath: path.join(__dirname, 'renderer', 'index.html'),
-    bounds: snapshot.windowBounds,
-    windowMode: snapshot.settings.windowMode,
-    onBoundsChanged: persistBounds,
+    bounds: snapshot.windowBounds,    onBoundsChanged: persistBounds,
     onError: (error) => console.error('[DoTodo window]', error)
   });
 
@@ -221,13 +219,7 @@ function createDialogs() {
 
 function createShellAdapter() {
   return Object.freeze({
-    openPath: (directory) => electronShell.openPath(directory),
-    setWindowMode(mode) {
-      const result = shellController.setWindowMode(mode);
-      if (!result.ok) throw new Error(result.error);
-      return result;
-    },
-    setLaunchAtLogin(enabled) {
+    openPath: (directory) => electronShell.openPath(directory),    setLaunchAtLogin(enabled) {
       const result = shellController.setLaunchAtLogin(enabled);
       if (!result.ok) throw new Error(result.error);
       return result;
@@ -251,7 +243,7 @@ function persistSettings(patch) {
  * 把最新快照推给渲染进程。
  *
  * IPC 命令会自己带上快照，但**托盘菜单改的设置不会经过渲染进程**：
- * 用户在托盘里切了「窗口置顶」，设置面板里的选中态就一直是旧的，
+ * 用户在托盘里改了设置，设置面板里的选中态就一直是旧的，
  * 直到别的原因触发一次重绘。所以主进程主动推一次。
  */
 function broadcastSnapshot() {
@@ -266,11 +258,7 @@ function broadcastSnapshot() {
  */
 async function handleShellIntent(intent) {
   try {
-    if (intent.type === 'window-mode') {
-      const applied = shellController.setWindowMode(intent.mode);
-      if (!applied.ok) throw new Error(applied.error);
-      persistSettings({ windowMode: intent.mode });
-    } else if (intent.type === 'launch-at-login') {
+    if (intent.type === 'launch-at-login') {
       // 系统拒绝时抛错，于是这一项永远不会被写进配置。
       const applied = shellController.setLaunchAtLogin(intent.enabled);
       if (!applied.ok) throw new Error(applied.error);

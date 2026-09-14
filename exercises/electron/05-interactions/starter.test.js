@@ -5,7 +5,6 @@ const {
   dropInstruction,
   undoWindow,
   summarizeHistory,
-  nextMode,
   reduceDrag
 } = require('./starter');
 
@@ -30,8 +29,9 @@ test('dropInstruction 判断落点以及是否真的发生了移动', () => {
   assert.deepEqual(dropInstruction([10, 20, 30], 5, 3), { targetIndex: 0, changed: true });
   assert.deepEqual(dropInstruction([10, 20, 30], 25, 3), { targetIndex: 2, changed: true });
   assert.deepEqual(dropInstruction([10, 20, 30], 25, 2), { targetIndex: 2, changed: false });
-  assert.deepEqual(dropInstruction([10, 20], 100, 2), { targetIndex: 1, changed: true });
-  assert.deepEqual(dropInstruction([10, 20], 100, 1), { targetIndex: 1, changed: false });
+  // 越过最后一个中点 = 落到末尾 = midpoints.length（不是 length - 1）。
+  assert.deepEqual(dropInstruction([10, 20], 100, 2), { targetIndex: 2, changed: false });
+  assert.deepEqual(dropInstruction([10, 20], 100, 1), { targetIndex: 2, changed: true });
 });
 
 test('dropInstruction 对空候选返回 -1', () => {
@@ -78,20 +78,6 @@ test('summarizeHistory 在没有任何完成项时返回 null', () => {
     { date: '2026-09-12', tasks: [] },
     { date: '2026-09-11', tasks: [{ completed: false }] }
   ]).bestDay, null);
-});
-
-test('nextMode 在模式之间循环', () => {
-  const modes = ['normal', 'topmost', 'desktop'];
-  assert.equal(nextMode(modes, 'normal'), 'topmost');
-  assert.equal(nextMode(modes, 'topmost'), 'desktop');
-  assert.equal(nextMode(modes, 'desktop'), 'normal');
-});
-
-test('nextMode 对未知值和空列表有确定行为', () => {
-  assert.equal(nextMode(['normal', 'topmost'], 'unknown'), 'normal');
-  assert.equal(nextMode(['normal'], 'normal'), 'normal');
-  assert.equal(nextMode([], 'normal'), null);
-  assert.equal(nextMode(undefined, 'normal'), null);
 });
 
 test('reduceDrag 从空闲状态开始拖拽', () => {

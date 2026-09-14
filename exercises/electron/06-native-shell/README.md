@@ -2,7 +2,7 @@
 
 ## 目标
 
-第 6 课接入了托盘、全局快捷键、窗口层级和开机启动。这些功能都在主进程里，不能靠启动窗口来测。生产的实现把「和系统打交道」与「决定做什么」混在 `src/electron/shell-controller.js` 里，只把后者留在可测的边界上。
+第 6 课接入了托盘、全局快捷键和开机启动。这些功能都在主进程里，不能靠启动窗口来测。生产的实现把「和系统打交道」与「决定做什么」混在 `src/electron/shell-controller.js` 里，只把后者留在可测的边界上。
 
 你要写的就是那部分「决定做什么」：它不调用任何 Electron API，输入是普通对象，输出也是普通对象。
 
@@ -26,16 +26,17 @@ node exercises/electron/06-native-shell/starter.test.js
 [
   { id: 'show',           label: '显示 DoTodo',       type: 'normal',   checked: false },
   { id: 'hide',           label: '隐藏 DoTodo',       type: 'normal',   checked: false },
-  { id: 'topmost',        label: '窗口置顶',          type: 'checkbox', checked: ? },
   { id: 'closeToTray',    label: '关闭时隐藏到托盘',  type: 'checkbox', checked: ? },
   { id: 'launchAtLogin',  label: '开机启动',          type: 'checkbox', checked: ? },
   { id: 'quit',           label: '退出 DoTodo',       type: 'normal',   checked: false }
 ]
 ```
 
-- 置顶的勾选只在 `windowMode === 'topmost'` 时为 `true`；`'desktop'` 不算置顶；
-- 另外两个开关直接取设置的布尔含义，缺失时为 `false`；
-- `settings` 为 `undefined` 时仍然返回 6 项，全部不勾。
+- 两个开关直接取设置的布尔含义，缺失时为 `false`；
+- `settings` 为 `undefined` 时仍然返回全部项，全部不勾。
+
+> 菜单里**没有**窗口层级相关的项。以前有一个「窗口置顶」勾选项，随着三种层级一起删掉了
+> （见第 6 课正文那一节）：窗口现在固定为不置顶 + 不进任务栏，没有可切换的东西。
 
 为什么把菜单做成「纯数据 + 一个渲染函数」？因为这样菜单结构就能被测试，而不是只能靠肉眼点一次。
 
@@ -61,17 +62,7 @@ node exercises/electron/06-native-shell/starter.test.js
 
 最后一条很关键：**「读不到」不等于「失败」**，两者要分开处理，否则在不支持读回的平台上会把正常设置误判成失败。
 
-### 4. `describeWindowMode(platform, mode)`
-
-平台能力探测。返回 `{ mode, exact, note }`，或在平台不支持时返回 `null`。
-
-- `normal` 和 `topmost` 在任何平台都是官方 API，`exact: true`、`note: null`；
-- `desktop` 在 `win32` 和 `darwin` 上是近似实现，`exact: false`，`note` 要能区分平台（Windows 的说明里出现「近似」，macOS 的说明里出现「macOS」）；
-- 其他平台上的 `desktop`、以及任何未知模式，返回 `null`。
-
-要点：不要为了让 API 好看而假装三端一致。
-
-### 5. `formatShortcut(accelerator, platform)`
+### 4. `formatShortcut(accelerator, platform)`
 
 把 Electron 的加速键文本转成用户看得懂的样子。
 
@@ -85,7 +76,7 @@ formatShortcut('F2', 'win32')                            → 'F2'
 - 只有 `CommandOrControl` 需要按平台替换（darwin → `⌘`，其他 → `Ctrl`）；
 - 空字符串、`null`、`undefined` 返回 `''`。
 
-### 6. `summarizeShellBoot(result)`
+### 5. `summarizeShellBoot(result)`
 
 把启动结果压成一句状态：
 
@@ -115,4 +106,4 @@ formatShortcut('F2', 'win32')                            → 'F2'
 3. 全局快捷键和窗口内的键盘快捷键有什么区别？各自该在哪里注册？
 4. 为什么「开机启动写入成功」不等于「开机启动已生效」？哪些平台最容易出现这种情况？
 5. 托盘图标为什么不能用 SVG？`assets/tray.png` 和 `assets/tray@2x.png` 的分工是什么？
-6. 如果某个功能在 macOS 上确实做不到，界面应该怎么处理才算诚实？
+6. 第 6 课讲了一个**做过又删掉**的功能（三种窗口层级）。什么情况下"如实说明平台差异"是对的，什么情况下"干脆不做"才是对的？两者的判断标准有什么不同？

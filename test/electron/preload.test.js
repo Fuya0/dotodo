@@ -55,7 +55,6 @@ test('preload exposes a frozen purpose-specific surface', () => {
     'reorderTask',
     'setCloseToTray',
     'setLaunchAtLogin',
-    'setWindowMode',
     'toggleTask',
     'undo'
   ]);
@@ -77,7 +76,6 @@ test('preload maps arguments onto fixed IPC channels', async () => {
   await api.deleteHistoryTask('2026-09-12', 'id-2');
   await api.continueTask('2026-09-12', 'id-2');
   await api.undo('undo-1');
-  await api.setWindowMode('topmost');
   await api.setCloseToTray(true);
   await api.setLaunchAtLogin(false);
   await api.importData();
@@ -97,7 +95,6 @@ test('preload maps arguments onto fixed IPC channels', async () => {
     ['history:delete-task', '2026-09-12', 'id-2'],
     ['history:continue-task', '2026-09-12', 'id-2'],
     ['undo:apply', 'undo-1'],
-    ['settings:set-window-mode', 'topmost'],
     ['settings:set-close-to-tray', true],
     ['settings:set-launch-at-login', false],
     ['data:import'],

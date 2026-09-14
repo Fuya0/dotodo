@@ -10,31 +10,24 @@ const {
 } = require('./starter');
 
 test('planTrayMenu 把设置投影成可序列化的菜单计划', () => {
-  assert.deepEqual(planTrayMenu({ windowMode: 'topmost', closeToTray: true, launchAtLogin: false }), [
+  assert.deepEqual(planTrayMenu({ closeToTray: true, launchAtLogin: false }), [
     { id: 'show', label: '显示 DoTodo', type: 'normal', checked: false },
     { id: 'hide', label: '隐藏 DoTodo', type: 'normal', checked: false },
-    { id: 'topmost', label: '窗口置顶', type: 'checkbox', checked: true },
     { id: 'closeToTray', label: '关闭时隐藏到托盘', type: 'checkbox', checked: true },
     { id: 'launchAtLogin', label: '开机启动', type: 'checkbox', checked: false },
     { id: 'quit', label: '退出 DoTodo', type: 'normal', checked: false }
   ]);
 });
 
-test('planTrayMenu 只用 windowMode 决定置顶勾选，缺值时全部不勾', () => {
-  const plan = planTrayMenu({ windowMode: 'normal' });
-  assert.equal(plan.find((item) => item.id === 'topmost').checked, false);
-  assert.equal(plan.find((item) => item.id === 'closeToTray').checked, false);
+test('planTrayMenu 缺值时全部不勾，且不含窗口层级项', () => {
+  const plan = planTrayMenu({ closeToTray: true });
+  assert.equal(plan.find((item) => item.id === 'closeToTray').checked, true);
+  assert.equal(plan.find((item) => item.id === 'launchAtLogin').checked, false);
+  // 窗口层级已经删掉，菜单里不该再出现这一项。
+  assert.equal(plan.some((item) => item.id === 'topmost'), false);
 
   const empty = planTrayMenu(undefined);
-  assert.equal(empty.length, 6);
   assert.deepEqual(empty.filter((item) => item.checked), []);
-});
-
-test('planTrayMenu 只在桌面模式下不算置顶', () => {
-  for (const mode of ['normal', 'desktop']) {
-    assert.equal(planTrayMenu({ windowMode: mode }).find((item) => item.id === 'topmost').checked, false);
-  }
-  assert.equal(planTrayMenu({ windowMode: 'topmost' }).find((item) => item.id === 'topmost').checked, true);
 });
 
 test('shouldHideOnClose 只在「开了托盘、没在建托盘、真的退出中」时隐藏', () => {
@@ -55,29 +48,6 @@ test('reconcileLaunchAtLogin 用读回值判断设置是否真的生效', () => 
 test('reconcileLaunchAtLogin 在系统不给读回值时信任请求', () => {
   assert.deepEqual(reconcileLaunchAtLogin(true, undefined), { ok: true, effective: true, rollback: false });
   assert.deepEqual(reconcileLaunchAtLogin(false, null), { ok: true, effective: false, rollback: false });
-});
-
-test('describeWindowMode 对真正有官方 API 的模式标记为 exact', () => {
-  assert.deepEqual(describeWindowMode('win32', 'normal'), { mode: 'normal', exact: true, note: null });
-  assert.deepEqual(describeWindowMode('darwin', 'topmost'), { mode: 'topmost', exact: true, note: null });
-  assert.deepEqual(describeWindowMode('linux', 'topmost'), { mode: 'topmost', exact: true, note: null });
-});
-
-test('describeWindowMode 坦白桌面层级只是近似，并且区分平台', () => {
-  const windows = describeWindowMode('win32', 'desktop');
-  assert.equal(windows.mode, 'desktop');
-  assert.equal(windows.exact, false);
-  assert.match(windows.note, /近似/);
-
-  const mac = describeWindowMode('darwin', 'desktop');
-  assert.equal(mac.exact, false);
-  assert.match(mac.note, /macOS/);
-});
-
-test('describeWindowMode 对不支持的平台和未知模式返回 null', () => {
-  assert.equal(describeWindowMode('linux', 'desktop'), null);
-  assert.equal(describeWindowMode('win32', 'floating-magic'), null);
-  assert.equal(describeWindowMode('win32', ''), null);
 });
 
 test('formatShortcut 按平台把加速键转成用户看得懂的样子', () => {

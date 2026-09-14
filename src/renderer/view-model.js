@@ -22,16 +22,6 @@ const HISTORY_EMPTY_COPY = Object.freeze({
   copy: '每过一天，当天的清单会完整留在这里。'
 });
 
-/**
- * 三种窗口层级。`desktop` 在主进程里是近似实现（移出任务栏，但不真的钉在桌面上）。
- * 这个差异写在课程和 README 里，不再每次切换时弹一条提示。
- */
-const WINDOW_MODES = Object.freeze([
-  { value: 'normal', label: '普通' },
-  { value: 'topmost', label: '置顶' },
-  { value: 'desktop', label: '桌面' }
-]);
-
 /** 把 `2026-09-13` 变成 `9月13日 周日`；非法输入返回空字符串。 */
 function formatDateLabel(localDate) {
   if (!isLocalDate(localDate)) return '';
@@ -87,13 +77,8 @@ function deriveSettingsView(snapshot) {
   assertSnapshot(snapshot);
 
   const settings = snapshot.settings && typeof snapshot.settings === 'object' ? snapshot.settings : {};
-  const windowMode = WINDOW_MODES.some((mode) => mode.value === settings.windowMode)
-    ? settings.windowMode
-    : WINDOW_MODES[0].value;
 
   return {
-    windowMode,
-    windowModes: WINDOW_MODES.map((mode) => ({ ...mode, selected: mode.value === windowMode })),
     closeToTray: Boolean(settings.closeToTray),
     launchAtLogin: Boolean(settings.launchAtLogin)
   };

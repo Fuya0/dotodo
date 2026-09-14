@@ -22,7 +22,7 @@ test('createState creates an open local day with desktop defaults', () => {
   assert.deepEqual(state.history, []);
   assert.deepEqual(state.settings, {
     backgroundOpacity: 0.82,
-    windowMode: 'topmost',
+    windowMode: 'desktop',
     closeToTray: true,
     launchAtLogin: false
   });
@@ -62,7 +62,7 @@ test('validateState rejects malformed dates and duplicate task ids', () => {
     history: [],
     settings: {
       backgroundOpacity: 0.82,
-      windowMode: 'topmost',
+      windowMode: 'desktop',
       closeToTray: true,
       launchAtLogin: false
     },
@@ -154,7 +154,7 @@ function validLinkedState() {
     }],
     settings: {
       backgroundOpacity: 0.82,
-      windowMode: 'topmost',
+      windowMode: 'desktop',
       closeToTray: true,
       launchAtLogin: false
     },

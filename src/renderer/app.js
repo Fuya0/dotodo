@@ -46,13 +46,11 @@ const dom = {
   settingsButton: document.querySelector('#settingsButton'),
   settingsPanel: document.querySelector('#settingsPanel'),
   settingsCloseButton: document.querySelector('#settingsCloseButton'),
-  windowModeGroup: document.querySelector('#windowModeGroup'),
   closeToTrayToggle: document.querySelector('#closeToTrayToggle'),
   launchAtLoginToggle: document.querySelector('#launchAtLoginToggle'),
   importButton: document.querySelector('#importButton'),
   exportButton: document.querySelector('#exportButton'),
   openFolderButton: document.querySelector('#openFolderButton'),
-  layerButton: document.querySelector('#layerButton'),
   minimizeButton: document.querySelector('#minimizeButton'),
   closeButton: document.querySelector('#closeButton')
 };
@@ -108,18 +106,8 @@ function render() {
 }
 
 function renderSettings(settings) {
-  renderWindowModes(settings);
   dom.closeToTrayToggle.checked = settings.closeToTray;
-  dom.launchAtLoginToggle.checked = settings.launchAtLogin;
-
-  const current = settings.windowModes.find((mode) => mode.selected);
-  dom.layerButton.setAttribute('aria-pressed', String(settings.windowMode === 'topmost'));
-  if (current) {
-    const label = `窗口层级：${current.label}（点击切换）`;
-    dom.layerButton.setAttribute('aria-label', label);
-    dom.layerButton.title = label;
-  }
-}
+  dom.launchAtLoginToggle.checked = settings.launchAtLogin;}
 
 /* ---------- Today ---------- */
 
@@ -540,30 +528,7 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
-/* ---------- 设置：窗口层级与原生开关 ---------- */
-
-/** 模式按钮只建一次，之后原地更新选中态，这样点击后焦点不会丢。 */
-function renderWindowModes(settings) {
-  if (dom.windowModeGroup.children.length !== settings.windowModes.length) {
-    dom.windowModeGroup.replaceChildren(...settings.windowModes.map(createModeButton));
-  }
-  for (const button of dom.windowModeGroup.querySelectorAll('.segment')) {
-    const selected = button.dataset.mode === settings.windowMode;
-    button.classList.toggle('is-active', selected);
-    button.setAttribute('aria-checked', String(selected));
-  }
-}
-
-function createModeButton(mode) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'segment';
-  button.dataset.mode = mode.value;
-  button.textContent = mode.label;
-  button.setAttribute('role', 'radio');
-  button.addEventListener('click', () => runCommand(window.dotodo.setWindowMode(button.dataset.mode)));
-  return button;
-}
+/* ---------- 设置：原生开关 ---------- */
 
 dom.closeToTrayToggle.addEventListener('change', (event) => {
   runCommand(window.dotodo.setCloseToTray(event.target.checked));
@@ -571,14 +536,6 @@ dom.closeToTrayToggle.addEventListener('change', (event) => {
 
 dom.launchAtLoginToggle.addEventListener('change', (event) => {
   runCommand(window.dotodo.setLaunchAtLogin(event.target.checked));
-});
-
-/** 标题栏的层级按钮在三档之间循环，和设置面板里的分段控件操作的是同一个设置。 */
-dom.layerButton.addEventListener('click', () => {
-  const settings = deriveSettingsView(state.snapshot);
-  const index = settings.windowModes.findIndex((mode) => mode.value === settings.windowMode);
-  const next = settings.windowModes[(index + 1) % settings.windowModes.length];
-  runCommand(window.dotodo.setWindowMode(next.value));
 });
 
 dom.minimizeButton.addEventListener('click', () => window.dotodo.minimizeWindow());

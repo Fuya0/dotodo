@@ -153,6 +153,9 @@ function createDailyTodoEngine(initialState, dependencies) {
   }
 
   function updateSettings(patch) {
+    // backgroundOpacity 与 windowMode 是历史字段：界面和 IPC 都不再改它们，
+    // 留着是为了让老存档照常加载（见 state-schema.js 的 DEFAULT_SETTINGS）。
+
     const allowedKeys = new Set([
       'backgroundOpacity',
       'windowMode',

@@ -882,36 +882,6 @@ h1 {
   gap: 5px;
 }
 
-.segmented {
-  display: flex;
-  gap: 1px;
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.segment {
-  padding: 3px 8px;
-  border: 0;
-  border-radius: 6px;
-  color: var(--muted);
-  background: transparent;
-  font-size: 10.5px;
-  cursor: pointer;
-  transition: color var(--ease), background var(--ease);
-}
-
-.segment:hover {
-  color: var(--ink-dim);
-}
-
-.segment.is-active {
-  color: var(--fill-ink);
-  background: var(--fill);
-  font-weight: 600;
-}
-
 .switch-row {
   position: relative;
   cursor: pointer;

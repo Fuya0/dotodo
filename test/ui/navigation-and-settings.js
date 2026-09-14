@@ -53,13 +53,10 @@ q('#settingsButton').click();
 await expect('设置面板打开', () => !q('#settingsPanel').hidden);
 check('设置按钮 aria-expanded 为 true', q('#settingsButton').getAttribute('aria-expanded') === 'true');
 
-const segments = qa('#windowModeGroup .segment');
-check('窗口层级有三个选项', segments.length === 3, `实际 ${segments.length}`);
-check('三个层级分别是普通/置顶/桌面',
-  segments.map((s) => s.textContent).join(',') === '普通,置顶,桌面',
-  segments.map((s) => s.textContent).join(','));
-check('当前层级正好一个被选中', qa('#windowModeGroup .segment.is-active').length === 1);
-check('被选中的是「置顶」', q('#windowModeGroup .segment.is-active').textContent === '置顶');
+// 三种窗口层级整套删掉了（它就是个多余的概念）。这两条断言反过来钉住"界面上不该再有它"，
+// 而不是简单删掉 —— 否则以后有人把概念加回来时不会有人拦。
+check('设置面板里没有窗口层级分组', q('#windowModeGroup') === null);
+check('界面里没有任何分段控件（层级选择器是它唯一的使用者）', qa('.segment').length === 0);
 
 check('有「关闭时隐藏到托盘」开关', q('#closeToTrayToggle') !== null);
 check('有「开机启动」开关', q('#launchAtLoginToggle') !== null);
@@ -75,12 +72,9 @@ await expect('关闭按钮能收起设置面板', () => q('#settingsPanel').hidd
 
 /* ---------- 标题栏 ---------- */
 
-check('标题栏有层级按钮', q('#layerButton') !== null);
+check('标题栏没有层级按钮', q('#layerButton') === null);
 check('标题栏有最小化按钮', q('#minimizeButton') !== null);
 check('标题栏有关闭按钮', q('#closeButton') !== null);
-check('层级按钮的提示语含当前层级',
-  (q('#layerButton').getAttribute('aria-label') ?? '').includes('置顶'),
-  q('#layerButton').getAttribute('aria-label'));
 
 /* ---------- 历史任务可删除并撤销（验收清单 3.3） ---------- */
 

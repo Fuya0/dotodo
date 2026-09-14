@@ -2,7 +2,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   createShellController,
-  createWindowModeAdapter,
   GLOBAL_ACCELERATOR
 } = require('../../src/electron/shell-controller');
 
@@ -44,7 +43,6 @@ function createHarness(overrides = {}) {
   const calls = [];
   const settings = {
     backgroundOpacity: 0.82,
-    windowMode: 'topmost',
     closeToTray: true,
     launchAtLogin: false,
     ...overrides.settings
@@ -142,7 +140,6 @@ function createHarness(overrides = {}) {
     getSettings: () => ({ ...settings }),
     onCommand: (intent) => intents.push(intent),
     onError: (error) => calls.push(['onError', error.message]),
-    windowModeAdapter: overrides.windowModeAdapter
   });
 
   return {
@@ -226,19 +223,17 @@ test('托盘创建失败时快捷键仍然可用', () => {
 });
 
 test('托盘菜单的条目与勾选状态来自当前设置', () => {
-  const harness = createHarness({ settings: { windowMode: 'normal', closeToTray: false, launchAtLogin: true } });
+  const harness = createHarness({ settings: { closeToTray: false, launchAtLogin: true } });
   harness.controller.initialize();
 
   const labels = harness.menus.at(-1).filter((item) => item.label).map((item) => item.label);
   assert.deepEqual(labels, [
     '显示 DoTodo',
     '隐藏 DoTodo',
-    '窗口置顶',
     '关闭时隐藏到托盘',
     '开机启动',
     '退出 DoTodo'
   ]);
-  assert.equal(menuItem(harness, '窗口置顶').checked, false);
   assert.equal(menuItem(harness, '关闭时隐藏到托盘').checked, false);
   assert.equal(menuItem(harness, '开机启动').checked, true);
 });
@@ -247,12 +242,10 @@ test('托盘菜单把设置变更交给 onCommand 意图，而不是自己写状
   const harness = createHarness();
   harness.controller.initialize();
 
-  menuItem(harness, '窗口置顶').click({ checked: false });
   menuItem(harness, '关闭时隐藏到托盘').click({ checked: false });
   menuItem(harness, '开机启动').click({ checked: true });
 
   assert.deepEqual(harness.intents, [
-    { type: 'window-mode', mode: 'normal' },
     { type: 'close-to-tray', enabled: false },
     { type: 'launch-at-login', enabled: true }
   ]);
@@ -284,94 +277,11 @@ test('refreshMenu 按最新设置重建菜单', () => {
   harness.controller.initialize();
   assert.equal(harness.menus.length, 1);
 
-  harness.settings.windowMode = 'normal';
+  harness.settings.closeToTray = false;
   harness.controller.refreshMenu();
 
   assert.equal(harness.menus.length, 2);
-  assert.equal(menuItem(harness, '窗口置顶').checked, false);
-});
-
-test('setWindowMode 映射到官方 BrowserWindow API', () => {
-  const harness = createHarness();
-  harness.controller.initialize();
-
-  assert.deepEqual(harness.controller.setWindowMode('normal'), { ok: true, mode: 'normal', notice: null });
-  assert.deepEqual(harness.calls.filter(([name]) => name === 'setAlwaysOnTop'), [['setAlwaysOnTop', false, 'normal']]);
-  assert.deepEqual(harness.calls.filter(([name]) => name === 'setSkipTaskbar'), [['setSkipTaskbar', false]]);
-
-  assert.deepEqual(harness.controller.setWindowMode('topmost'), { ok: true, mode: 'topmost', notice: null });
-  assert.deepEqual(harness.calls.filter(([name]) => name === 'setAlwaysOnTop'), [
-    ['setAlwaysOnTop', false, 'normal'],
-    ['setAlwaysOnTop', true, 'floating']
-  ]);
-});
-
-test('桌面模式返回近似实现的说明，而不是假装与系统等价', () => {
-  const windows = createHarness({ platform: 'win32' });
-  windows.controller.initialize();
-  const windowsResult = windows.controller.setWindowMode('desktop');
-  assert.equal(windowsResult.ok, true);
-  assert.equal(windowsResult.mode, 'desktop');
-  assert.match(windowsResult.notice, /近似/);
-  assert.deepEqual(windows.calls.filter(([name]) => name === 'setSkipTaskbar'), [['setSkipTaskbar', true]]);
-
-  const mac = createHarness({ platform: 'darwin' });
-  mac.controller.initialize();
-  const macResult = mac.controller.setWindowMode('desktop');
-  assert.equal(macResult.ok, true);
-  assert.match(macResult.notice, /macOS/);
-});
-
-test('setWindowMode 拒绝未知模式并且不改动窗口', () => {
-  const harness = createHarness();
-  harness.controller.initialize();
-
-  const result = harness.controller.setWindowMode('floating-magic');
-
-  assert.equal(result.ok, false);
-  assert.match(result.error, /窗口模式/);
-  assert.deepEqual(harness.calls.filter(([name]) => name === 'setAlwaysOnTop'), []);
-});
-
-test('窗口没有创建时 setWindowMode 返回失败而不是抛异常', () => {
-  const harness = createHarness({ noWindow: true });
-  harness.controller.initialize();
-
-  const result = harness.controller.setWindowMode('topmost');
-
-  assert.equal(result.ok, false);
-  assert.match(result.error, /窗口/);
-});
-
-test('窗口模式适配器可以被整体替换', () => {
-  const applied = [];
-  const harness = createHarness({
-    windowModeAdapter: {
-      apply: (_window, mode) => {
-        applied.push(mode);
-        return { applied: mode, notice: '自定义适配器' };
-      }
-    }
-  });
-  harness.controller.initialize();
-
-  const result = harness.controller.setWindowMode('desktop');
-
-  assert.deepEqual(applied, ['desktop']);
-  assert.equal(result.notice, '自定义适配器');
-  assert.deepEqual(harness.calls.filter(([name]) => name === 'setAlwaysOnTop'), []);
-});
-
-test('createWindowModeAdapter 对每一种模式都给出确定结果', () => {
-  const adapter = createWindowModeAdapter({ platform: 'win32' });
-  const recorded = [];
-  const fakeWindow = { setAlwaysOnTop: (...a) => recorded.push(a), setSkipTaskbar: (...a) => recorded.push(a) };
-
-  assert.deepEqual(adapter.apply(fakeWindow, 'normal'), { applied: 'normal', notice: null });
-  assert.deepEqual(adapter.apply(fakeWindow, 'topmost'), { applied: 'topmost', notice: null });
-  assert.equal(adapter.apply(fakeWindow, 'desktop').applied, 'desktop');
-  assert.equal(adapter.apply(fakeWindow, 'nope'), null);
-  assert.equal(recorded.length, 6);
+  assert.equal(menuItem(harness, '关闭时隐藏到托盘').checked, false);
 });
 
 test('setLaunchAtLogin 读回系统状态确认设置真的生效', () => {
