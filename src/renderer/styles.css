@@ -84,13 +84,18 @@ input:focus-visible {
 /* ---------- 外壳 ---------- */
 
 /*
- * 四行网格：提示条 / 标题栏 / 内容 / 底部标签。
+ * 四行网格：标题栏 / 提示条 / 内容 / 底部标签。
+ *
+ * 顺序很重要：**标题栏永远在第一行**。窗口控件（最小化、关闭）固定在顶部，
+ * 拖动区也在最上面那条像素上；提示条如果插到它前面，控件会整体下移，
+ * 肌肉记忆被打乱，而且最顶部不再是拖动区。
+ *
  * 提示条是**在流内**的一行，不再是绝对定位——以前它会盖住"今天要做"标题。
  */
 .app-shell {
   position: relative;
   display: grid;
-  grid-template-rows: auto 44px minmax(0, 1fr) 36px;
+  grid-template-rows: 44px auto minmax(0, 1fr) 36px;
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -111,11 +116,11 @@ input:focus-visible {
   z-index: 1;
 }
 
-.runtime-warning {
+.titlebar {
   grid-row: 1;
 }
 
-.titlebar {
+.runtime-warning {
   grid-row: 2;
 }
 

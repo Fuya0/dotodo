@@ -72,6 +72,54 @@ await expect('Alt+↓ 把第一行下移一位',
   () => rowTexts()[0] === beforeReorder[1] && rowTexts()[1] === beforeReorder[0],
   () => rowTexts().slice(0, 3).join(' | '));
 
+/* ---------- 指针拖拽 ---------- */
+// 拖拽是本项目里状态最多的一段（pointerdown → move → up，外加 cancel/leave 分支），
+// 按 Alt+↓ 走的是另一条代码路径，不能代替它。
+
+const beforeDrag = rowTexts().slice(0, 3);
+const countBeforeDrag = rows().length;
+const dragHandle = rows()[0].querySelector('.drag-handle');
+const thirdRow = rows()[2];
+const handleRect = dragHandle.getBoundingClientRect();
+const thirdRect = thirdRow.getBoundingClientRect();
+
+dragHandle.dispatchEvent(new PointerEvent('pointerdown', {
+  bubbles: true, cancelable: true, button: 0, pointerId: 7,
+  clientY: handleRect.top + handleRect.height / 2
+}));
+check('拖拽开始后该行带 dragging 类', rows()[0].classList.contains('dragging'));
+
+window.dispatchEvent(new PointerEvent('pointermove', {
+  bubbles: true, pointerId: 7, clientY: thirdRect.bottom - 2
+}));
+check('拖过目标行时出现落点提示', qa('.todo-row.drag-over').length === 1,
+  `实际 ${qa('.todo-row.drag-over').length}`);
+
+window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7 }));
+await expect('拖拽松手后顺序真的变了', () => rowTexts()[0] !== beforeDrag[0],
+  () => rowTexts().slice(0, 3).join(' | '));
+check('拖拽结束后没有残留的拖拽状态', qa('.todo-row.dragging').length === 0);
+check('拖拽结束后没有残留的落点提示', qa('.todo-row.drag-over').length === 0);
+check('拖拽没有丢掉任何任务', rows().length === countBeforeDrag, `${rows().length} vs ${countBeforeDrag}`);
+
+/* ---------- 拖拽取消 ---------- */
+// pointerleave 是「用户把行拖出列表」的取消路径，必须不改变顺序。
+
+const beforeCancel = rowTexts();
+const cancelHandle = rows()[0].querySelector('.drag-handle');
+const cancelRect = cancelHandle.getBoundingClientRect();
+cancelHandle.dispatchEvent(new PointerEvent('pointerdown', {
+  bubbles: true, cancelable: true, button: 0, pointerId: 8,
+  clientY: cancelRect.top + cancelRect.height / 2
+}));
+window.dispatchEvent(new PointerEvent('pointermove', {
+  bubbles: true, pointerId: 8, clientY: rows()[2].getBoundingClientRect().bottom - 2
+}));
+q('#todoList').dispatchEvent(new PointerEvent('pointerleave', { bubbles: false, pointerId: 8 }));
+check('拖出列表后立刻清掉落点提示', qa('.todo-row.drag-over').length === 0);
+window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 8 }));
+check('取消拖拽后顺序不变', rowTexts().join('|') === beforeCancel.join('|'));
+
 /* ---------- 删除与撤销 ---------- */
 
 const beforeDelete = rowTexts();

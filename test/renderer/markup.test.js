@@ -121,10 +121,12 @@ test('玻璃背景是固定的中性灰，且不开放给用户调', () => {
 });
 
 test('提示条在网格流内，不会盖住标题', () => {
-  // 绝对定位的警告条会盖住「今天要做」，所以它必须是网格的第 1 行。
+  // 绝对定位的警告条会盖住「今天要做」，所以它必须是网格里的一行。
   assert.doesNotMatch(stylesCode, /\.runtime-warning\s*\{[^}]*position:\s*absolute/);
-  assert.match(stylesCode, /\.runtime-warning\s*\{[^}]*grid-row:\s*1/);
-  assert.match(stylesCode, /grid-template-rows:\s*auto 44px minmax\(0, 1fr\) 36px/);
+  assert.match(stylesCode, /\.runtime-warning\s*\{[^}]*grid-row:\s*2/);
+  // 标题栏必须留在第一行：窗口控件的位置不能因为出现提示而移动。
+  assert.match(stylesCode, /\.titlebar\s*\{[^}]*grid-row:\s*1/);
+  assert.match(stylesCode, /grid-template-rows:\s*44px auto minmax\(0, 1fr\) 36px/);
 });
 
 test('界面里没有透明度滑杆，也没有底部快捷键提示', () => {
