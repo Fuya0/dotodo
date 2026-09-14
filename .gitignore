@@ -5,6 +5,9 @@ node_modules/
 release/
 dist/
 
+# 截图工具的临时输出
+shots/
+
 # 本地运行时可能落到仓库里的状态文件（正常应写入用户数据目录）
 state.json
 state.backup.json

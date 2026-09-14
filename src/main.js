@@ -1,4 +1,5 @@
 const path = require('node:path');
+const fs = require('node:fs');
 const crypto = require('node:crypto');
 const {
   app,
@@ -24,10 +25,17 @@ let windowController = null;
 let shellController = null;
 let ipcRegistration = null;
 const isSmokeTest = process.argv.includes('--smoke-test');
+const captureTarget = readArgument('--capture=');
+const captureBackdrop = readArgument('--capture-backdrop=');
 const trayIconPath = path.join(__dirname, '..', 'assets', 'tray.png');
 const runtimeWarnings = [];
 let hasUnsavedChanges = false;
 let currentSaveError = null;
+
+function readArgument(prefix) {
+  const match = process.argv.find((value) => value.startsWith(prefix));
+  return match ? match.slice(prefix.length) : null;
+}
 
 if (isSmokeTest) {
   const isolatedUserData = process.env.DOTODO_SMOKE_USER_DATA;
@@ -124,6 +132,22 @@ function createAppWindow() {
           })()
         `);
         if (!ready) throw new Error('Renderer 或 Preload 未准备完成。');
+
+        if (captureTarget) {
+          // 让字体、布局和入场动画先落定，否则截到的是半成品。
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          if (captureBackdrop) {
+            await smokeWindow.webContents.executeJavaScript(
+              `document.documentElement.style.background = ${JSON.stringify(captureBackdrop)}; true`
+            );
+            await new Promise((resolve) => setTimeout(resolve, 120));
+          }
+          const image = await smokeWindow.webContents.capturePage();
+          fs.mkdirSync(path.dirname(captureTarget), { recursive: true });
+          fs.writeFileSync(captureTarget, image.toPNG());
+          console.log(`DOTODO_CAPTURE_WRITTEN ${captureTarget}`);
+        }
+
         console.log('DOTODO_SMOKE_READY');
         finishSmoke(0);
       } catch (error) {
