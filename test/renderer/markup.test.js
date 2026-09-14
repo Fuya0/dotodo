@@ -143,7 +143,7 @@ test('底部标签与页面容器一一对应', () => {
 
 test('排序同时提供指针拖拽和键盘入口', () => {
   assert.match(app, /addEventListener\('pointerdown'/);
-  assert.match(app, /resolveDropIndex\(midpoints, event\.clientY\)/);
+  assert.match(app, /resolveDropIndex\(bounds, event\.clientY, drop\.fromIndex\)/);
   assert.match(app, /window\.dotodo\.reorderTask/);
   assert.match(app, /event\.altKey && \(event\.key === 'ArrowDown'/);
   assert.doesNotMatch(app, /\bdragstart\b/);

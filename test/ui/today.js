@@ -134,6 +134,39 @@ check('拖拽结束后没有残留的拖拽状态', qa('.todo-row.dragging').len
 check('拖拽结束后没有残留的落点提示', qa('.todo-row.drag-over').length === 0);
 check('拖拽没有丢掉任何任务', rows().length === countBeforeDrag, `${rows().length} vs ${countBeforeDrag}`);
 
+/* ---------- 拖到「第几行」就落到第几位 ---------- */
+// 真机验收报过：「我 1 和 3 换位，结果是 1 和 2 换位」。
+// 旧规则要求指针越过目标行的**中线**才算插到它后面，所以瞄准第 3 行的上半部分
+// 会变成"插到第 3 行之前"。现在改成：指针落在哪一行，就插到那一行的后面或前面
+// （按拖动方向），于是"拖到第 3 行"就是"落到第 3 位"。
+
+const textsBefore = rowTexts();
+const fromText = textsBefore[0];
+const targetText = textsBefore[2];
+const ontoHandle = rows()[0].querySelector('.drag-handle');
+const ontoHandleRect = ontoHandle.getBoundingClientRect();
+// 刻意瞄准第 3 行的**上半部分**：旧规则在这里就会错位。
+const targetRect = rows()[2].getBoundingClientRect();
+
+ontoHandle.dispatchEvent(new PointerEvent('pointerdown', {
+  bubbles: true, cancelable: true, button: 0, pointerId: 9,
+  clientY: ontoHandleRect.top + ontoHandleRect.height / 2
+}));
+window.dispatchEvent(new PointerEvent('pointermove', {
+  bubbles: true, pointerId: 9, clientY: targetRect.top + 6
+}));
+
+check('瞄准第 3 行上半部分时，落点线画在第 3 行的下边',
+  q('.todo-row.drag-over-after') !== null &&
+  q('.todo-row.drag-over-after').querySelector('.todo-text').textContent === targetText,
+  `drag-over-after 在「${q('.todo-row.drag-over-after')?.querySelector('.todo-text')?.textContent}」上`);
+
+window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 9 }));
+
+await expect('拖到第 3 行就真的落到第 3 位',
+  () => rowTexts()[2] === fromText && rowTexts()[0] === textsBefore[1] && rowTexts()[1] === targetText,
+  () => `现在是「${rowTexts().slice(0, 4).join("、")}」，期望「${textsBefore[1]}、${targetText}、${fromText}」`);
+
 /* ---------- 拖到列表最底部 ---------- */
 // 一次真机验收报的是"位置和实际替换的内容不一致、很不灵敏"。
 // 原因是越过最后一个中点时返回了下标 length - 1：差一格，而且那个下标上还有行，
@@ -155,8 +188,8 @@ window.dispatchEvent(new PointerEvent('pointermove', {
 }));
 
 check('拖到列表下方时出现「落到末尾」的提示',
-  qa('.todo-row.drag-over-end').length === 1,
-  `实际 ${qa('.todo-row.drag-over-end').length} 个`);
+  qa('.todo-row.drag-over-after').length === 1,
+  `实际 ${qa('.todo-row.drag-over-after').length} 个`);
 
 window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 8 }));
 

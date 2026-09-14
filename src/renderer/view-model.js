@@ -85,20 +85,47 @@ function deriveSettingsView(snapshot) {
 }
 
 /**
- * 拖拽落点：`midpoints` 是除被拖行之外每一行的垂直中点。
- * 指针越过第 i 个中点就落到下一个位置，越过最后一个中点则落到末尾。
- * 返回的是「移除被拖行之后」的下标，正好是 reorderTask 需要的目标位置。
+ * 拖拽落点。
  *
- * 越过末尾时返回 `midpoints.length`，**不是** `length - 1`。
- * 插入位置 k 的含义是「插到 others[k] 之前」，而 others 有 length 个元素，
- * 所以「插到最后」是 length。返回 length - 1 会让被拖的行走不到末尾：
- * 差一格，而且那个下标上还有一行，落点提示会画在"倒数第二行之前"。
- * 这个错误是一次真机验收报出来的（"位置和实际替换的内容不一致"）。
+ * `rows` 是**除被拖行之外**每一行的纵向范围（`{ top, bottom }`，按屏幕从上到下），
+ * `fromIndex` 是被拖行在完整列表里的原始下标。
+ *
+ * 规则：**指针落在哪一行，就插到那一行的后面或前面 —— 取决于你往下拖还是往上拖。**
+ *
+ *   - 往下拖（被拖行的原位置在目标行之上）→ 插到目标行**之后**；
+ *   - 往上拖（被拖行的原位置在目标行之下）→ 插到目标行**之前**。
+ *
+ * 返回 `{ targetIndex, markerIndex, side }`：
+ *   - `targetIndex` 是「移除被拖行之后」的列表下标，正好是 reorderTask 需要的目标位置；
+ *   - `markerIndex` / `side` 告诉界面把落点线画在哪一行的上边还是下边。
+ *
+ * 为什么不用「越过中线才算插到后面」那套：那套规则下想跟第 3 行换位，指针必须落到
+ * 第 3 行的**下半部分**；停在上半部分就变成"插到第 3 行之前"，看起来成了跟第 2 行换位。
+ * 一次真机验收报的就是这个（"我 1 和 3 换位，结果是 1 和 2 换位"）。
  */
-function resolveDropIndex(midpoints, clientY) {
-  if (!Array.isArray(midpoints) || midpoints.length === 0) return -1;
-  const index = midpoints.findIndex((midpoint) => clientY < midpoint);
-  return index === -1 ? midpoints.length : index;
+function resolveDropIndex(rows, clientY, fromIndex) {
+  if (!Array.isArray(rows) || rows.length === 0) return { targetIndex: -1, markerIndex: -1, side: null };
+  if (!Number.isFinite(clientY)) return { targetIndex: -1, markerIndex: -1, side: null };
+
+  const hovered = rows.findIndex((row) => clientY >= row.top && clientY <= row.bottom);
+
+  if (hovered === -1) {
+    // 落在所有行之外的空白里：上面就是开头，下面就是末尾。
+    if (clientY < rows[0].top) {
+      return { targetIndex: 0, markerIndex: 0, side: 'before' };
+    }
+    return { targetIndex: rows.length, markerIndex: rows.length - 1, side: 'after' };
+  }
+
+  // 还原这一行在完整列表里的下标（others 里排在 fromIndex 之后的都往后错了一位）
+  const hoveredFullIndex = hovered < fromIndex ? hovered : hovered + 1;
+  const movingDown = fromIndex <= hoveredFullIndex;
+
+  return {
+    targetIndex: movingDown ? hovered + 1 : hovered,
+    markerIndex: hovered,
+    side: movingDown ? 'after' : 'before'
+  };
 }
 
 /** 一行任务只暴露界面真正需要的字段，顺序由 position 表达。 */

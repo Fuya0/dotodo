@@ -412,21 +412,28 @@ h1 {
   background: var(--fill-soft);
 }
 
+/* 正在被拖的那一行：压暗 + 虚线框，一眼看得出"拿起的是它"。 */
 .todo-row.dragging {
-  opacity: 0.4;
+  background: var(--fill-soft);
+  outline: 1px dashed var(--line-strong);
+  outline-offset: -1px;
+  opacity: 0.5;
 }
 
 .todo-row.drag-over {
   background: var(--fill-soft);
-  box-shadow: inset 2px 0 0 var(--ink-dim);
 }
 
 /*
- * 落到列表末尾时没有"下一行"可以画左侧提示，改成标在最后一行的下边缘。
- * 少了这条，拖到底部就没有任何落点反馈。
+ * 落点线。往下拖画在目标行的下边、往上拖画在上边 —— 和松手后的结果一致。
+ * 以前用的是一条 2px 的左侧竖条，含义是"插到这一行之前"，在触摸板和小窗口上都不明显。
  */
-.todo-row.drag-over-end {
-  box-shadow: inset 0 -2px 0 var(--ink-dim);
+.todo-row.drag-over-before {
+  box-shadow: inset 0 2px 0 var(--ink);
+}
+
+.todo-row.drag-over-after {
+  box-shadow: inset 0 -2px 0 var(--ink);
 }
 
 @keyframes arrive {

@@ -54,6 +54,57 @@ if (isSmokeTest) {
     app.setPath('userData', isolatedUserData);
   }
 }
+// Chromium 会在 userData 里铺开十来个自己的目录（Cache、GPUCache、Local Storage、
+// Network、Dictionaries……）。它们跟我们的数据无关，混在一起的结果是用户打开数据目录
+// 一眼看到一堆看不懂的东西，还得从里面找 state.json。
+//
+// Electron 的 `sessionData` 默认就等于 userData，这些缓存全挂在它下面。把它指到
+// 子目录之后，数据目录顶层只剩三样：state.json（清单）、state.backup.json（上一份）、
+// chromium/（Chromium 自己的东西，不用管）。
+app.setPath('sessionData', path.join(app.getPath('userData'), 'chromium'));
+
+/**
+ * 清掉以前版本留在数据目录顶层的 Chromium 目录。
+ *
+ * `sessionData` 挪进 `chromium/` 之后，顶层那些同名目录**再也不会被读到** ——
+ * 它们是孤儿。留着只会让用户打开数据目录时看到一堆看不懂的东西，
+ * 还得从里面翻出 state.json。
+ *
+ * 只删这份写死的名单，名单里没有 state.json、state.backup.json 和 recovery-*.json。
+ * 删不掉也不报错：可能被别的进程占着，而它是孤儿目录，留着不影响正确性。
+ */
+const ORPHANED_CHROMIUM_ENTRIES = Object.freeze([
+  'blob_storage',
+  'Cache',
+  'Code Cache',
+  'DawnGraphiteCache',
+  'DawnWebGPUCache',
+  'Dictionaries',
+  'GPUCache',
+  'Local Storage',
+  'Network',
+  'Session Storage',
+  'Shared Dictionary',
+  'DIPS',
+  'Local State',
+  'Preferences',
+  'declarative_performance_observer.db',
+  'declarative_performance_observer.db-journal'
+]);
+
+function removeOrphanedChromiumEntries() {
+  const dataDirectory = app.getPath('userData');
+  for (const name of ORPHANED_CHROMIUM_ENTRIES) {
+    try {
+      fs.rmSync(path.join(dataDirectory, name), { recursive: true, force: true });
+    } catch {
+      // 见上：孤儿目录删不掉不影响任何事。
+    }
+  }
+}
+
+removeOrphanedChromiumEntries();
+
 // 诊断模式必须在单实例锁之前退出：如果用户已经开着应用，
 // 拿不到锁就什么也打印不出来，而这个模式正是用来回答「数据到底存在哪」的。
 const hasSingleInstanceLock = printPaths ? true : app.requestSingleInstanceLock();

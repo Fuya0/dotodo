@@ -420,23 +420,21 @@ function onDragMove(event) {
 
   // 落点是相对「已经拿走被拖行之后」的列表算的，所以要从候选里排除它自己。
   const others = rowsOf().filter((row) => row !== drop.row);
-  const midpoints = others.map((row) => {
+  const bounds = others.map((row) => {
     const rect = row.getBoundingClientRect();
-    return rect.top + rect.height / 2;
+    return { top: rect.top, bottom: rect.bottom };
   });
-  const targetIndex = resolveDropIndex(midpoints, event.clientY);
-  if (targetIndex === drop.targetIndex) return;
 
-  drop.targetIndex = targetIndex;
+  const outcome = resolveDropIndex(bounds, event.clientY, drop.fromIndex);
+  if (outcome.targetIndex === drop.targetIndex) return;
+
+  drop.targetIndex = outcome.targetIndex;
   clearDropMarker();
-  if (targetIndex >= others.length) {
-    // 落到末尾：这时没有"下一行"可以画左侧提示，改标在最后一行的下边缘。
-    // 以前这里直接 others[targetIndex] 取到 undefined 就什么都不画 ——
-    // 拖到底部既看不到提示、松手后位置也差一格。
-    const last = others[others.length - 1];
-    if (last) last.classList.add('drag-over', 'drag-over-end');
-  } else if (others[targetIndex]) {
-    others[targetIndex].classList.add('drag-over');
+
+  // 往哪边拖，落点线就画在目标行的哪一边。
+  const marker = others[outcome.markerIndex];
+  if (marker && outcome.side) {
+    marker.classList.add('drag-over', outcome.side === 'before' ? 'drag-over-before' : 'drag-over-after');
   }
 }
 
@@ -469,8 +467,8 @@ function cleanupDrag() {
 }
 
 function clearDropMarker() {
-  for (const row of dom.list.querySelectorAll('.drag-over, .drag-over-end')) {
-    row.classList.remove('drag-over', 'drag-over-end');
+  for (const row of dom.list.querySelectorAll('.drag-over')) {
+    row.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
   }
 }
 

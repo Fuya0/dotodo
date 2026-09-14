@@ -251,40 +251,56 @@ test('deriveSettingsView 把开关类设置强制成布尔值', () => {
 
 /* ---------- 拖拽落点 ---------- */
 
-test('resolveDropIndex 用中点判断落点', () => {
-  assert.equal(resolveDropIndex([10, 20, 30], 5), 0);
-  assert.equal(resolveDropIndex([10, 20, 30], 15), 1);
-  assert.equal(resolveDropIndex([10, 20, 30], 25), 2);
-  // 越过最后一个中点是"插到末尾"。插入位置的含义是「插到 others[k] 之前」，
-  // others 有 3 个元素，所以"最后"是 3，不是 2 —— 这条原来写的是 2，
-  // 把差一格的 bug 当成期望值固化了下来。
-  assert.equal(resolveDropIndex([10, 20, 30], 100), 3);
+test('拖到某一行上就插到那一行之后（往下拖）', () => {
+  // 4 行、每行 42px。被拖的是完整列表里的第 0 行，所以 others 是原来的第 1~4 行。
+  const rows = [
+    { top: 100, bottom: 142 },
+    { top: 142, bottom: 184 },
+    { top: 184, bottom: 226 },
+    { top: 226, bottom: 268 }
+  ];
+
+  // 指针落在 others[1]（完整列表的第 2 行）上 → 插到它后面
+  assert.deepEqual(resolveDropIndex(rows, 160, 0), { targetIndex: 2, markerIndex: 1, side: 'after' });
+  // 落在第一行上 → 插到它后面，也就是往下挪一位
+  assert.deepEqual(resolveDropIndex(rows, 110, 0), { targetIndex: 1, markerIndex: 0, side: 'after' });
 });
 
-test('resolveDropIndex 恰好等于中点时落到下一个位置', () => {
-  assert.equal(resolveDropIndex([10, 20, 30], 10), 1);
-  assert.equal(resolveDropIndex([10, 20, 30], 30), 3);
+test('拖到某一行上就插到那一行之前（往上拖）', () => {
+  const rows = [
+    { top: 100, bottom: 142 },
+    { top: 142, bottom: 184 },
+    { top: 184, bottom: 226 },
+    { top: 226, bottom: 268 }
+  ];
+
+  // 被拖的是完整列表第 2 行。指针落在 others[0]（第 0 行）上 → 插到它前面
+  assert.deepEqual(resolveDropIndex(rows, 110, 2), { targetIndex: 0, markerIndex: 0, side: 'before' });
+  // 落在 others[1]（第 1 行）上 → 插到它前面，也就是往上挪一位
+  assert.deepEqual(resolveDropIndex(rows, 160, 2), { targetIndex: 1, markerIndex: 1, side: 'before' });
 });
 
-test('拖到列表底部时那一行真的排到最后', () => {
-  // 按结果断言，而不是只对下标：一次真机验收报的是
-  // "拖拽的时候位置和实际替换的内容不一致"，只有把插入结果算出来才发现差一格。
-  const others = ['B', 'C', 'D', 'E'];
-  const targetIndex = resolveDropIndex([10, 20, 30, 40], 999);
+test('拖到列表上下方的空白里就是开头或末尾', () => {
+  const rows = [{ top: 100, bottom: 142 }, { top: 142, bottom: 184 }];
+  assert.deepEqual(resolveDropIndex(rows, 50, 3), { targetIndex: 0, markerIndex: 0, side: 'before' });
+  assert.deepEqual(resolveDropIndex(rows, 900, 3), { targetIndex: 2, markerIndex: 1, side: 'after' });
+});
+
+test('把第 1 行拖到第 3 行，结果就是跟第 3 行换位', () => {
+  // 真机验收报过："我 1 和 3 换位，结果是 1 和 2 换位"。
+  // 这条按结果断言，避免再把"越过中线才算插到后面"那种差半行的语义当成功。
+  const list = ['A', 'B', 'C', 'D', 'E'];
+  const others = list.slice(1);
+  const rows = others.map((_, index) => ({ top: 100 + index * 42, bottom: 142 + index * 42 }));
+  // 指针落在 C 那一行（others[1]）的上半部分 —— 旧规则在这里会插到 C 之前
+  const outcome = resolveDropIndex(rows, 100 + 42 + 10, 0);
   const reordered = [...others];
-  reordered.splice(targetIndex, 0, 'A');
-  assert.deepEqual(reordered, ['B', 'C', 'D', 'E', 'A']);
-});
-
-test('拖到中间时插到指针所在的那两行之间', () => {
-  const others = ['B', 'C', 'D', 'E'];
-  // 指针落在 C 的中点(20)和 D 的中点(30)之间 → 插到 D 之前
-  const targetIndex = resolveDropIndex([10, 20, 30, 40], 25);
-  const reordered = [...others];
-  reordered.splice(targetIndex, 0, 'A');
+  reordered.splice(outcome.targetIndex, 0, list[0]);
   assert.deepEqual(reordered, ['B', 'C', 'A', 'D', 'E']);
 });
 
-test('resolveDropIndex 对空列表返回 -1', () => {
-  assert.equal(resolveDropIndex([], 5), -1);
+test('resolveDropIndex 对空列表和非法输入返回 -1', () => {
+  assert.deepEqual(resolveDropIndex([], 5, 0), { targetIndex: -1, markerIndex: -1, side: null });
+  assert.deepEqual(resolveDropIndex(null, 5, 0), { targetIndex: -1, markerIndex: -1, side: null });
+  assert.deepEqual(resolveDropIndex([{ top: 0, bottom: 10 }], NaN, 0), { targetIndex: -1, markerIndex: -1, side: null });
 });

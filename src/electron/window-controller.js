@@ -22,7 +22,9 @@ function createWindowController({
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
-    hasShadow: true,
+    // hasShadow 会在无边框窗口四周画一圈系统阴影，看起来是"外圈一层灰"。
+    // 用户明确要求去掉：它是一个贴在桌面上的平面部件，不该有悬浮投影。
+    hasShadow: false,
     // 它是个常驻桌面的小部件，不是要参与窗口管理的应用：
     // 不置顶（不和别的窗口抢位置），也不出现在任务栏里。
     // 以前这里有 normal / topmost / desktop 三种层级可选，删掉了 ——
