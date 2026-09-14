@@ -50,6 +50,15 @@ the History page and the settings panel, and it is a step in `npm run verify:win
 acceptance checklist now marks those rows as automated, leaving the human only the things a machine
 cannot see (tray, DPI, multi-monitor, animation feel).
 
+**R8 — The data-safety paths are automated too.** A scenario may ship a Node-side `<name>.case.js`
+supplying a different starting state, a `prepare` hook (write a corrupt `state.json`) and a `verify`
+hook that inspects the data directory after the process exits. That turned the two checklist sections
+which mattered most — cross-day rollover and corrupt-file recovery — into automated checks that need
+no system-clock changes: seeding a state whose `activeDay.date` is yesterday exercises the identical
+rollover branch. `npm run ui-check` is now 8 scenarios and 187 assertions, including byte-for-byte
+proof that a corrupt file was preserved rather than overwritten. This is also where the title bar
+regression was caught: the grid put the warning band in row 1, pushing the window controls down.
+
 
 ## Global Constraints
 

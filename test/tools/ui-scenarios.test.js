@@ -9,7 +9,15 @@ const prelude = fs.readFileSync(path.join(scenarioDirectory, '_prelude.js'), 'ut
 function scenarioFiles() {
   return fs
     .readdirSync(scenarioDirectory)
-    .filter((name) => name.endsWith('.js') && !name.startsWith('_'))
+    // `_prelude.js` 是公共前置，`*.case.js` 是 Node 侧的配对文件，都不是场景本身。
+    .filter((name) => name.endsWith('.js') && !name.startsWith('_') && !name.endsWith('.case.js'))
+    .sort();
+}
+
+function caseFiles() {
+  return fs
+    .readdirSync(scenarioDirectory)
+    .filter((name) => name.endsWith('.case.js'))
     .sort();
 }
 
@@ -42,6 +50,34 @@ test('前置代码提供了场景依赖的辅助函数', () => {
     assert.ok(prelude.includes(helper), `_prelude.js 缺少 ${helper}`);
   }
   assert.match(prelude, /const results = \[\];/);
+});
+
+test('每个 .case.js 都有同名的场景文件', () => {
+  // 配对文件是给场景提供起始存档和 Node 侧检查的。单独存在说明场景被删了却忘了删它。
+  for (const name of caseFiles()) {
+    const scenario = name.replace(/\.case\.js$/, '.js');
+    assert.ok(
+      scenarioFiles().includes(scenario),
+      `${name} 没有对应的场景文件 ${scenario}`
+    );
+  }
+});
+
+test('.case.js 是 Node 侧文件，必须导出可用的钩子', () => {
+  // 和场景文件相反：它跑在 Node 里，可以（也需要）用 require 和 fs。
+  for (const name of caseFiles()) {
+    const module = require(path.join(scenarioDirectory, name));
+    assert.equal(typeof module, 'object', `${name} 应该导出一个对象。`);
+    const hooks = ['fixture', 'prepare', 'verify'].filter((key) => typeof module[key] === 'function');
+    assert.ok(hooks.length > 0, `${name} 至少要导出 fixture / prepare / verify 之一。`);
+    if (module.fixture) {
+      const value = module.fixture();
+      assert.ok(value === null || typeof value === 'object', `${name} 的 fixture() 必须返回对象或 null。`);
+    }
+    for (const hook of ['prepare', 'verify']) {
+      if (module[hook]) assert.equal(module[hook].length, 1, `${name} 的 ${hook}() 应该只接收数据目录一个参数。`);
+    }
+  }
 });
 
 const rendererDirectory = path.join(__dirname, '..', '..', 'src', 'renderer');

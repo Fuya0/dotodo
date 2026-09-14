@@ -36,8 +36,27 @@ const SCENARIO_TIMEOUT_MS = 45_000;
 function listScenarios() {
   return fs
     .readdirSync(scenarioDirectory)
-    .filter((name) => name.endsWith('.js') && !name.startsWith('_'))
+    // `_prelude.js` 是公共前置，`*.case.js` 是 Node 侧的配对文件，都不是场景本身。
+    .filter((name) => name.endsWith('.js') && !name.startsWith('_') && !name.endsWith('.case.js'))
     .sort();
+}
+
+/**
+ * 场景可以配一个同名 `.case.js`（Node 侧），用来做渲染进程做不到的事：
+ *
+ *   module.exports = {
+ *     fixture: () => state | null,        // 起始存档，返回 null 表示不写
+ *     prepare: (userDataDirectory) => {}, // 写完存档后调用，可以删改文件
+ *     verify:  (userDataDirectory) => [{ name, passed, detail }]
+ *   };
+ *
+ * 典型用途：跨日归档要一份「日期是昨天」的存档；损坏恢复要在启动前把
+ * state.json 写成坏内容，并在退出后检查目录里有没有留下恢复文件。
+ */
+function loadCaseModule(name) {
+  const casePath = path.join(scenarioDirectory, name.replace(/\.js$/, '.case.js'));
+  if (!fs.existsSync(casePath)) return null;
+  return require(casePath);
 }
 
 function runScenario(name) {
@@ -46,15 +65,34 @@ function runScenario(name) {
     const userData = path.join(workspace, 'userData');
     fs.mkdirSync(userData, { recursive: true });
 
-    // 演示数据必须先过状态校验：非法数据会让应用把它当成"损坏"隔离掉，
-    // 场景就会在一个空清单上跑，报出一堆莫名其妙的选择器错误。
-    const fixture = buildDemoState();
-    const validation = validateState(fixture);
-    if (!validation.ok) {
-      resolve({ name, error: `演示数据无效：${validation.error}`, checks: [] });
+    let caseModule = null;
+    try {
+      caseModule = loadCaseModule(name);
+    } catch (error) {
+      resolve({ name, error: `无法加载 .case.js：${error.message}`, checks: [] });
       return;
     }
-    fs.writeFileSync(path.join(userData, 'state.json'), `${JSON.stringify(fixture, null, 2)}\n`, 'utf8');
+
+    // 起始存档必须先过状态校验：非法数据会让应用把它当成"损坏"隔离掉，
+    // 场景就会在一个空清单上跑，报出一堆莫名其妙的选择器错误。
+    const fixture = caseModule?.fixture ? caseModule.fixture() : buildDemoState();
+    if (fixture !== null) {
+      const validation = validateState(fixture);
+      if (!validation.ok) {
+        resolve({ name, error: `起始存档无效：${validation.error}`, checks: [] });
+        return;
+      }
+      fs.writeFileSync(path.join(userData, 'state.json'), `${JSON.stringify(fixture, null, 2)}\n`, 'utf8');
+    }
+
+    if (caseModule?.prepare) {
+      try {
+        caseModule.prepare(userData);
+      } catch (error) {
+        resolve({ name, error: `prepare 失败：${error.message}`, checks: [] });
+        return;
+      }
+    }
 
     const drivePath = path.join(workspace, 'scenario.drive.js');
     fs.writeFileSync(
@@ -90,6 +128,18 @@ function runScenario(name) {
 
     const settle = (outcome) => {
       clearTimeout(timer);
+      // verify 必须在删目录之前跑：它检查的就是应用写在这个目录里的东西。
+      if (caseModule?.verify && !outcome.error) {
+        try {
+          const extra = caseModule.verify(userData);
+          if (Array.isArray(extra)) outcome.checks = [...outcome.checks, ...extra];
+        } catch (error) {
+          outcome.checks = [
+            ...outcome.checks,
+            { name: 'Node 侧检查执行失败', passed: false, detail: error.message }
+          ];
+        }
+      }
       try {
         fs.rmSync(workspace, { recursive: true, force: true });
       } catch {
@@ -100,6 +150,25 @@ function runScenario(name) {
         if (stderr.trim()) console.error(stderr.trim());
       }
       resolve(outcome);
+    };
+
+    /** 托盘是真实的原生对象，只有在这个进程里才知道它有没有建起来。 */
+    const shellBootCheck = () => {
+      const match = stdout.match(/DOTODO_SHELL_BOOT (.*)/);
+      if (!match) {
+        return { name: '壳层汇报了启动结果', passed: false, detail: '没有收到 DOTODO_SHELL_BOOT。' };
+      }
+      let boot;
+      try {
+        boot = JSON.parse(match[1]);
+      } catch (error) {
+        return { name: '壳层汇报了启动结果', passed: false, detail: `不是合法 JSON：${error.message}` };
+      }
+      return {
+        name: '托盘图标在真实 Electron 里创建成功',
+        passed: boot.trayCreated === true,
+        detail: boot.trayCreated === true ? null : (boot.warnings ?? []).join(' / ') || 'trayCreated 不为 true'
+      };
     };
 
     child.once('error', (error) => settle({ name, error: `无法启动 Electron：${error.message}`, checks: [] }));
@@ -125,7 +194,7 @@ function runScenario(name) {
         settle({ name, error: '场景必须 return 一个断言数组。', checks: [] });
         return;
       }
-      settle({ name, error: null, checks, shot: shotPath });
+      settle({ name, error: null, checks: [...checks, shellBootCheck()], shot: shotPath });
     });
   });
 }

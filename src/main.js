@@ -322,6 +322,16 @@ async function initialize() {
   for (const warning of shellBoot.warnings) addWarning(warning);
   if (shellBoot.shortcut.warning) console.info(`[DoTodo shell] ${shellBoot.shortcut.warning}`);
 
+  // 冒烟与交互场景都会用到这一行：托盘建起来了没有、快捷键拿没拿到。
+  // 托盘图标在打包后是从 asar 里读的，这条输出是唯一能证明那条路径解析成功的证据。
+  if (isSmokeTest) {
+    console.log(`DOTODO_SHELL_BOOT ${JSON.stringify({
+      trayCreated: shellBoot.trayCreated,
+      shortcut: shellBoot.shortcut,
+      warnings: shellBoot.warnings
+    })}`);
+  }
+
   ipcRegistration = registerIpc({
     ipcMain,
     engine,

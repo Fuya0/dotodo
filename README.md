@@ -156,9 +156,9 @@ build/                       只用于构建的资源（应用图标 SVG）
 
 ```powershell
 npm start            # 开发运行
-npm test             # 全部测试（160+ 条断言）
+npm test             # 全部测试（160 条断言 / 13 个文件）
 npm run smoke        # 真实 Electron 冒烟测试，使用隔离的临时数据目录
-npm run ui-check     # 在真实渲染进程里重放交互（点、按键、断言 DOM），每个场景留一张截图
+npm run ui-check     # 在真实渲染进程里重放交互（8 个场景 / 187 条断言），每个场景留一张截图
 npm run icons        # 重新生成托盘图标
 npm run shot         # 把界面渲染成 PNG（可指定底色和页面），用于检查视觉效果
 npm run paths        # 打印应用实际使用的数据目录与状态文件路径
@@ -175,7 +175,7 @@ npm run dist:mac     # macOS dmg + zip（必须在 macOS 上执行）
 | 单元 / 集成 | 领域规则、存储与恢复、IPC 校验、投影函数 | `npm test` |
 | 静态约束 | 选择器对得上、渲染层不碰 Node、界面没混进不该有的元素 | `npm test` |
 | 冒烟 | 真实 Electron 里 Preload、IPC、DOM 真的连通 | `npm run smoke` |
-| **交互场景** | **在真实渲染进程里点击、按键，断言 DOM 与数据变化** | `npm run ui-check` |
+| **交互场景** | **在真实渲染进程里点击、按键，断言 DOM 与磁盘结果；含跨日归档、时钟回拨、损坏恢复** | `npm run ui-check` |
 | 打包 | 产物能装、体积分类、asar 内容不含测试与文档 | `npm run verify:win` |
 | 人工 | 托盘、DPI、多显示器、真实安装升级、手感 | [验收清单](docs/testing/electron-windows-manual-checklist.md) |
 
