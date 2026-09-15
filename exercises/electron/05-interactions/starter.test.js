@@ -25,17 +25,47 @@ test('moveItem 对越界下标原样返回副本，并且不修改传入数组',
   assert.deepEqual(source, ['a', 'b', 'c']);
 });
 
-test('dropInstruction 判断落点以及是否真的发生了移动', () => {
-  assert.deepEqual(dropInstruction([10, 20, 30], 5, 3), { targetIndex: 0, changed: true });
-  assert.deepEqual(dropInstruction([10, 20, 30], 25, 3), { targetIndex: 2, changed: true });
-  assert.deepEqual(dropInstruction([10, 20, 30], 25, 2), { targetIndex: 2, changed: false });
-  // 越过最后一个中点 = 落到末尾 = midpoints.length（不是 length - 1）。
-  assert.deepEqual(dropInstruction([10, 20], 100, 2), { targetIndex: 2, changed: false });
-  assert.deepEqual(dropInstruction([10, 20], 100, 1), { targetIndex: 2, changed: true });
+// 除被拖行之外的那些行的纵向范围，从上到下。行高 20。
+const ROWS = [
+  { top: 0, bottom: 20 },
+  { top: 20, bottom: 40 },
+  { top: 40, bottom: 60 }
+];
+
+test('dropInstruction：往下拖，插到指针所在那一行的后面', () => {
+  // 被拖的是原来的第 1 行，所以 ROWS[0]、ROWS[1]、ROWS[2] 分别是原来的第 2、3、4 行。
+  // 指针停在第 3 行（ROWS[1]）里 —— 结果必须是"跟第 3 行换位"，也就是 targetIndex 2。
+  assert.deepEqual(
+    dropInstruction(ROWS, 30, 0),
+    { targetIndex: 2, lineIndex: 1, lineSide: 'after' }
+  );
+  // 指针停在第 2 行（ROWS[0]）里 → 没动。
+  assert.deepEqual(
+    dropInstruction(ROWS, 10, 0),
+    { targetIndex: 1, lineIndex: 0, lineSide: 'after' }
+  );
 });
 
-test('dropInstruction 对空候选返回 -1', () => {
-  assert.deepEqual(dropInstruction([], 5, 0), { targetIndex: -1, changed: false });
+test('dropInstruction：往上拖，插到指针所在那一行的前面', () => {
+  // 被拖的是原来的第 3 行：ROWS[0]、ROWS[1]、ROWS[2] 是原来的第 1、2、4 行。
+  // 指针停在第一行里 → 挪到最前。
+  assert.deepEqual(
+    dropInstruction(ROWS, 10, 2),
+    { targetIndex: 0, lineIndex: 0, lineSide: 'before' }
+  );
+  // 指针停在最后一行里 → 挪到最后。
+  assert.deepEqual(
+    dropInstruction(ROWS, 50, 2),
+    { targetIndex: 3, lineIndex: 2, lineSide: 'after' }
+  );
+});
+
+test('dropInstruction：落在列表之外，以及读不到几何时', () => {
+  assert.deepEqual(dropInstruction(ROWS, -5, 0), { targetIndex: 0, lineIndex: 0, lineSide: 'before' });
+  // 落到末尾是 ROWS.length，不是 length - 1。
+  assert.deepEqual(dropInstruction(ROWS, 100, 0), { targetIndex: 3, lineIndex: 2, lineSide: 'after' });
+  assert.deepEqual(dropInstruction([], 10, 0), { targetIndex: -1, lineIndex: -1, lineSide: null });
+  assert.deepEqual(dropInstruction(ROWS, Number.NaN, 0), { targetIndex: -1, lineIndex: -1, lineSide: null });
 });
 
 test('undoWindow 给出剩余时间与是否过期', () => {

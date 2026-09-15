@@ -120,17 +120,47 @@ const [task] = tasks.splice(currentIndex, 1);   // 先拿走
 tasks.splice(targetIndex, 0, task);             // 再插入
 ```
 
-所以 `targetIndex` 是「拿走被拖行**之后**」的数组下标。而视觉上量出来的中点却来自「还没拿走」的数组。两者在向下拖时正好差一位。
+所以 `targetIndex` 是「拿走被拖行**之后**」的数组下标。而指针量出来的是「还没拿走」的那份列表，两者在向下拖时正好差一位。
 
-处理办法不是去补正 1，而是让计算和语义保持一致：
+处理办法不是去补正 1，而是让计算和语义保持一致：**先把被拖行排除掉**。
 
 ```js
 const others = rowsOf().filter((row) => row !== drop.row);   // 先排除自己
-const midpoints = others.map((row) => row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2);
-const targetIndex = resolveDropIndex(midpoints, event.clientY);
+const bounds = others.map((row) => {
+  const rect = row.getBoundingClientRect();
+  return { top: rect.top, bottom: rect.bottom };
+});
+const outcome = resolveDropIndex(bounds, event.clientY, drop.fromIndex);
 ```
 
-候选里没有自己，量出来的下标天然就是「移除之后」的位置，直接可以递给 `reorderTask`。这也是为什么 `resolveDropIndex` 值得单独抽成纯函数——它只做一件事：一串中点加一个纵坐标，推出落点。
+候选里没有自己，算出来的下标天然就是「移除之后」的位置，直接可以递给 `reorderTask`。这也是为什么 `resolveDropIndex` 值得单独抽成纯函数。
+
+### 落点规则换过一次
+
+最初的规则是「指针越过某一行的**中线**，就插到它后面」——听起来很自然，实际用起来是错的。
+
+想跟第 3 行换位，指针必须落到第 3 行的**下半部分**；停在上半部分就变成"插到第 3 行之前"，
+看起来成了跟第 2 行换位。一次真机验收报的就是这个，原话是：
+
+> 我 1 和 3 换位，结果是 1 和 2 换位。
+
+现在的规则是**方向决定前后**：
+
+- 往下拖（被拖行的原位置在目标行之上）→ 插到目标行**之后**；
+- 往上拖（被拖行的原位置在目标行之下）→ 插到目标行**之前**。
+
+这样"指针停在第 3 行上"这个动作永远等于"跟第 3 行换位"，不用再去猜用户瞄准的是上半还是下半。
+
+麻烦的地方在于 `fromIndex` 是**完整列表**里的下标，而 `rows` 里没有自己 ——
+排在 `fromIndex` 之后的每一行，在完整列表里都要往后错一位：
+
+```js
+const hovered = rows.findIndex((row) => clientY >= row.top && clientY <= row.bottom);
+const hoveredFullIndex = hovered < fromIndex ? hovered : hovered + 1;
+const movingDown = fromIndex <= hoveredFullIndex;
+```
+
+返回值也从「一个下标」变成三个字段：`targetIndex` 给 `reorderTask`，`markerIndex` 和 `side` 给界面画落点线。
 
 ### 拖拽不是唯一的排序方式
 

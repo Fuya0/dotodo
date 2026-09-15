@@ -87,12 +87,14 @@ function snapToCell(bounds, cell, origin) {
  * @returns {{x,y,width,height}|null} 实在放不下就返回 null，调用方保持原样。
  */
 function planBounds({ bounds, cell, origin, positions, screen, minimumRows = 3 }) {
+  // 先吸附：位置取最近格线、尺寸取整数格。下面全在格子坐标里算。
+  const snapped = snapToCell(bounds, cell, origin);
   const taken = occupiedCells(positions, cell, origin);
-  const columns = Math.max(1, Math.round(bounds.width / cell.width));
-  const wantedColumn = cellOf(bounds.x, cell.width, origin.x);
-  const wantedRow = cellOf(bounds.y, cell.height, origin.y);
+  const columns = Math.max(1, Math.round(snapped.width / cell.width));
+  const wantedColumn = cellOf(snapped.x, cell.width, origin.x);
+  const wantedRow = cellOf(snapped.y, cell.height, origin.y);
 
-  const tallest = Math.max(1, Math.round(bounds.height / cell.height));
+  const tallest = Math.max(1, Math.round(snapped.height / cell.height));
   for (let rows = tallest; rows >= Math.max(1, minimumRows); rows -= 1) {
     const slot = nearestFreeSlot({ columns, rows, wantedColumn, wantedRow, taken, cell, origin, screen });
     if (slot === null) continue;

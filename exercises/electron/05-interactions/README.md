@@ -8,7 +8,7 @@
 
 ## 使用方法
 
-打开 `starter.js`，把 6 个占位函数实现完，然后运行：
+打开 `starter.js`，把 5 个占位函数实现完，然后运行：
 
 ```powershell
 node exercises/electron/05-interactions/starter.test.js
@@ -28,23 +28,33 @@ node exercises/electron/05-interactions/starter.test.js
 
 先想办法验证「返回的是新数组」：`assert.notEqual(result, source)` 比较的是引用。
 
-### 2. `dropInstruction(midpoints, clientY, fromIndex)`
+### 2. `dropInstruction(rows, clientY, fromIndex)`
 
-`midpoints` 是**除被拖行之外**每一行的垂直中点（升序）。返回：
+`rows` 是**除被拖行之外**每一行的纵向范围（`{ top, bottom }`，按屏幕从上到下）。
+`fromIndex` 是被拖行在**完整列表**里的原始下标 —— 注意它和 `rows` 的下标不是一回事。
+
+规则：**指针落在哪一行里，就插到那一行的后面或前面 —— 取决于你往下拖还是往上拖。**
+
+- 往下拖（被拖行的原位置在目标行之上）→ 插到目标行**之后**；
+- 往上拖（被拖行的原位置在目标行之下）→ 插到目标行**之前**；
+- 指针在所有行上方 → 插到最前；在所有行下方 → 插到最后（末尾是 `rows.length`，不是 `length - 1`）；
+- `rows` 为空、或 `clientY` 不是有限数 → `{ targetIndex: -1, lineIndex: -1, lineSide: null }`。
+
+返回：
 
 ```js
-{ targetIndex, changed }
+{ targetIndex, lineIndex, lineSide }
 ```
 
-- 指针越过第 `i` 个中点就落到下一个位置：第一个满足 `clientY < midpoints[i]` 的下标；
-- 越过最后一个中点则落到末尾（`midpoints.length`）；
+- `targetIndex` 是「**移除被拖行之后**」的列表下标，正好是 `reorderTask` 需要的位置；
+- `lineIndex` / `lineSide`（`'before'` / `'after'`）说明落点线该画在哪一行的上边还是下边。
 
-  注意是 `length` 而不是 `length - 1`：插入位置 `k` 的含义是「插到 `midpoints[k]` 之后那一行之前」，
-  而 `midpoints` 有 `length` 个元素，所以「插到最后」是 `length`。写 `length - 1` 会让被拖的行
-  走不到末尾 —— 而且索引 `length - 1` 上还有一行，落点提示会画在"倒数第二行之前"。
-  这个错误在真实项目里出现过一次，是一次人工验收发现的。
-- 空数组返回 `{ targetIndex: -1, changed: false }`；
-- `changed` 表示这次落点是否真的改变了位置。
+> **为什么不用"越过中线才算插到后面"那套。** 那套规则下想跟第 3 行换位，指针必须落到第 3 行的
+> **下半部分**；停在上半部分就变成"插到第 3 行之前"，看起来成了跟第 2 行换位。一次真机验收
+> 报的就是这个（原话："我 1 和 3 换位，结果是 1 和 2 换位"）。
+>
+> 真正的难点是 `rows` 的下标和完整列表的下标对不上：`rows` 里排在 `fromIndex` 之后的每一行，
+> 在完整列表里都要往后错一位。这一步想清楚了，整个函数就只剩几行。
 
 ### 3. `undoWindow(issuedAt, now)`
 
@@ -103,7 +113,7 @@ node exercises/electron/05-interactions/starter.test.js
 打开 `src/renderer/app.js`，回答：
 
 1. `beginDrag` 为什么把 `pointermove` / `pointerup` 监听到 `window` 上，而不是拖拽手柄上？如果只监听手柄，快速拖动时会丢事件吗？
-2. `onDragMove` 为什么先 `rowsOf().filter((row) => row !== drop.row)` 再算中点？直接用全部行的中点会发生什么？
+2. `onDragMove` 为什么先把被拖行从行列表里排除，再算落点？如果不排除，`fromIndex` 和 `rows` 的下标还对得上吗？
 3. `cleanupDrag` 里五个 `removeEventListener` 是必需的还是可以省略？漏掉 `pointerleave` 那个会有什么后果？
 4. `showUndoBar` 里 `dom.undoProgress.style.animation = 'none'; void dom.undoProgress.offsetWidth;` 这两行在做什么？只写第一行或只写第二行会怎样？
 5. 撤销条把「可见性」留给渲染进程，「有效性」留给主进程的 `expiresAt`。如果反过来，让渲染进程决定令牌是否有效，会有什么风险？
