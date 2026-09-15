@@ -54,15 +54,17 @@ class FakeBrowserWindow {
   close() { this.closed = true; }
   isDestroyed() { return this.destroyed; }
   getBounds() { return { ...this.bounds }; }
+  setBounds(next) { this.bounds = { ...next }; this.boundsWrites = (this.boundsWrites ?? 0) + 1; }
 }
 
-function createFakeDesktopLayer(outcome = { attached: true, reason: 'attached' }) {
+function createFakeDesktopLayer(outcome = { attached: true, reason: 'attached' }, layout = null) {
   const calls = [];
   return {
     calls,
     hwndOf(window) { calls.push(['hwndOf', window]); return WINDOW_HANDLE; },
     attach(handle) { calls.push(['attach', handle]); return outcome; },
-    focus(handle) { calls.push(['focus', handle]); return true; }
+    focus(handle) { calls.push(['focus', handle]); return true; },
+    iconLayout() { calls.push(['iconLayout']); return layout; }
   };
 }
 
@@ -79,6 +81,7 @@ function createHarness(options = {}) {
     onBoundsChanged: (bounds) => boundsChanges.push(bounds),
     onError: (error) => errors.push(error),
     desktopLayer: options.desktopLayer ?? null,
+    workArea: options.workArea ?? (() => null),
     schedule: (callback) => (scheduled.push(callback), scheduled.length),
     cancelSchedule: () => {}
   });
@@ -225,4 +228,56 @@ test('窗口销毁后 focusDesktop 不再碰原生调用', () => {
 
   assert.equal(controller.focusDesktop(), false);
   assert.equal(desktopLayer.calls.length, 0);
+});
+
+/** 这台机器上真实读到的几何：格子 76x100，原点 (14,2)。 */
+const LAYOUT = Object.freeze({
+  cell: { width: 76, height: 100 },
+  origin: { x: 14, y: 2 },
+  positions: [{ x: 14, y: 2 }]
+});
+const WORK_AREA = () => ({ width: 1920, height: 1032 });
+
+test('第一次显示之前就把窗口摆到图标网格上', () => {
+  const desktopLayer = createFakeDesktopLayer(undefined, LAYOUT);
+  const { window } = createHarness({ desktopLayer, workArea: WORK_AREA });
+  window.bounds = { x: 762, y: 498, width: 380, height: 500 };
+
+  window.onceListeners.get('ready-to-show')();
+
+  // x=762 → 第 10 列（774）；y=498 → 第 5 行（502）。
+  assert.deepEqual(window.bounds, { x: 774, y: 502, width: 380, height: 500 });
+});
+
+test('读不到图标布局时窗口待在原地，不做任何事', () => {
+  const desktopLayer = createFakeDesktopLayer(); // iconLayout 返回 null
+  const { window } = createHarness({ desktopLayer, workArea: WORK_AREA });
+  window.bounds = { x: 762, y: 498, width: 380, height: 500 };
+
+  window.onceListeners.get('ready-to-show')();
+
+  assert.deepEqual(window.bounds, { x: 762, y: 498, width: 380, height: 500 });
+  assert.equal(window.boundsWrites, undefined);
+});
+
+test('没有可用区域信息时不摆位', () => {
+  const desktopLayer = createFakeDesktopLayer(undefined, LAYOUT);
+  const { window } = createHarness({ desktopLayer }); // workArea 默认返回 null
+  window.bounds = { x: 762, y: 498, width: 380, height: 500 };
+
+  window.onceListeners.get('ready-to-show')();
+
+  assert.deepEqual(window.bounds, { x: 762, y: 498, width: 380, height: 500 });
+});
+
+test('已经对齐时不再写一次位置，吸附才会收敛', () => {
+  const desktopLayer = createFakeDesktopLayer(undefined, LAYOUT);
+  const { scheduled, window } = createHarness({ desktopLayer, workArea: WORK_AREA });
+  window.bounds = { x: 774, y: 502, width: 380, height: 500 };
+
+  window.listeners.get('move')();
+  scheduled.at(-1)();
+
+  // setBounds 会再发一次 move；如果这里还写一次，就会来回弹个不停。
+  assert.equal(window.boundsWrites, undefined);
 });

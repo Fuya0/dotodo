@@ -1,3 +1,5 @@
+const { planBounds } = require('./icon-grid');
+
 function createWindowController({
   BrowserWindow,
   preloadPath,
@@ -6,6 +8,7 @@ function createWindowController({
   onBoundsChanged,
   desktopLayer = null,
   onDesktopAttachment = () => {},
+  workArea = () => null,
   onError = () => {},
   schedule = setTimeout,
   cancelSchedule = clearTimeout
@@ -54,8 +57,40 @@ function createWindowController({
     // 挂到桌面上要在**第一次显示之前**。先以普通窗口的样子闪一下再贴过去，
     // 那一下跳变比什么都显眼；`ready-to-show` 正好是"画好了但还没显示"。
     attachToDesktop();
+    // 摆位也要在显示之前，否则用户会看到它先落在旧位置再跳一下。
+    applyDesktopGrid();
     window.show();
   });
+
+  /**
+   * 把窗口摆到桌面图标的网格上，并且不压住任何图标。
+   *
+   * 读不到图标布局（不是 Windows、Explorer 不给读、桌面层没挂上）就什么都不做 ——
+   * 这条路径上的任何失败都只该表现为"窗口待在原地"，不该有别的后果。
+   */
+  function applyDesktopGrid() {
+    if (!desktopLayer || window.isDestroyed()) return;
+    const layout = desktopLayer.iconLayout();
+    const area = workArea();
+    if (!layout || !area) return;
+
+    const target = planBounds({
+      bounds: window.getBounds(),
+      cell: layout.cell,
+      origin: layout.origin,
+      positions: layout.positions,
+      screen: area
+    });
+    if (!target) return;
+
+    const current = window.getBounds();
+    // 相等就停。`setBounds` 会再发一次 move/resize，靠这一句让来回吸附收敛。
+    if (current.x === target.x && current.y === target.y &&
+        current.width === target.width && current.height === target.height) {
+      return;
+    }
+    window.setBounds(target);
+  }
 
   /**
    * 让窗口成为桌面的一部分。
@@ -81,6 +116,8 @@ function createWindowController({
       if (revision !== boundsRevision || window.isDestroyed()) return;
       boundsTimer = null;
       try {
+        // 拖完/缩完之后先吸附回网格，再记位置 —— 记下来的就是最终那一份。
+        applyDesktopGrid();
         onBoundsChanged(window.getBounds());
       } catch (error) {
         onError(error);

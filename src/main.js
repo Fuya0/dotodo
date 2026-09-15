@@ -9,6 +9,7 @@ const {
   dialog,
   globalShortcut,
   ipcMain,
+  screen,
   shell: electronShell
 } = require('electron');
 const { createState } = require('./domain/state-schema');
@@ -178,6 +179,9 @@ function createAppWindow() {
     bounds: snapshot.windowBounds,
     onBoundsChanged: persistBounds,
     desktopLayer,
+    // 吸附要用**可用区域**而不是整块屏幕：桌面图标的坐标是屏幕坐标，但窗口不该
+    // 落到任务栏底下去。
+    workArea: () => screen.getPrimaryDisplay().workAreaSize,
     onDesktopAttachment: (outcome) => {
       // 挂不上是正常的降级，不是错误；但「为什么没贴上」必须能从日志回答，
       // 否则这个功能坏掉时是彻底静默的。

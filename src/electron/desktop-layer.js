@@ -1,4 +1,5 @@
 const { loadWin32 } = require('./win32');
+const { gridOrigin } = require('./icon-grid');
 
 /** 桌面的窗口类名。Explorer 用它同时承载图标层和壁纸层。 */
 const DESKTOP_HOST_CLASS = 'Progman';
@@ -68,7 +69,17 @@ function createDesktopLayer({ native = loadWin32() } = {}) {
     focus: (hwnd) => (usable ? focusWindow(native, hwnd) : false),
 
     /** 窗口现在还挂在桌面上吗。Explorer 重启之后这里会变成 false。 */
-    isAttached: (hwnd) => (usable ? isWindowAttached(native, hwnd) : false)
+    isAttached: (hwnd) => (usable ? isWindowAttached(native, hwnd) : false),
+
+    /**
+     * 桌面图标的网格和占位。
+     *
+     * 图标的位置在 Explorer 进程的内存里，要跨进程读 —— 哪一步读不到都返回 null，
+     * 调用方据此什么都不做。桌面层的任何一步失败都不该影响窗口正常显示。
+     *
+     * @returns {{cell:{width,height}, origin:{x,y}, positions:Array}|null}
+     */
+    iconLayout: () => (usable ? readIconLayout(native) : null)
   });
 }
 
@@ -116,6 +127,35 @@ function isWindowAttached(native, hwnd) {
   if (!hwnd) return false;
   const host = native.findWindow(DESKTOP_HOST_CLASS, null);
   return Boolean(host) && native.getParent(hwnd) === host;
+}
+
+/**
+ * 读出桌面图标的格子尺寸、网格原点和每个图标的位置。
+ *
+ * 链路是 Explorer 自己的窗口树：`Progman -> SHELLDLL_DefView -> SysListView32`。
+ * 任何一环缺失都返回 null —— 拿不到就不摆，而不是猜一个位置。
+ */
+function readIconLayout(native) {
+  if (typeof native.findChildWindow !== 'function' || typeof native.iconSpacing !== 'function' ||
+      typeof native.iconCount !== 'function' || typeof native.iconPositions !== 'function') {
+    return null;
+  }
+
+  const host = native.findWindow(DESKTOP_HOST_CLASS, null);
+  if (!host) return null;
+  const defView = native.findChildWindow(host, 'SHELLDLL_DefView');
+  if (!defView) return null;
+  const listView = native.findChildWindow(defView, 'SysListView32');
+  if (!listView) return null;
+
+  const cell = native.iconSpacing(listView);
+  if (!cell) return null;
+  const count = native.iconCount(listView);
+  if (count === null) return null;
+  const positions = native.iconPositions(listView, count);
+  if (!positions) return null;
+
+  return { cell, origin: gridOrigin(positions, cell), positions };
 }
 
 function refused(reason) {
