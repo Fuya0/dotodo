@@ -93,7 +93,7 @@ npm run dist:win
 
 ## 想学 Electron
 
-**从这个文件开始：**[`docs/learning/electron/README.md`](docs/learning/electron/README.md)
+**从这个文件开始：** `F:\杂\转开发\DoTodo-learning\course\README.md`
 
 那是课程总索引。九课按顺序讲完这个应用从空目录到安装包的全过程：
 
@@ -109,10 +109,11 @@ npm run dist:win
 | 08 | 仓库整理、构建配置与课程索引 |
 | 09 | 打包、签名与跨平台发布 |
 
-每一课都配了手写习题（[`exercises/electron/`](exercises/electron/)），8 组 53 道题，全部用 `node:test` 自动判分：
+每一课都配了手写习题（`F:\杂\转开发\DoTodo-learning\exercises\`），全部用 `node:test` 自动判分。
+**课程和习题都不在这个仓库里**——它们是本地学习材料，不参与软件的版本管理。
 
 ```powershell
-node exercises/electron/04-renderer/starter.test.js
+node exercises/04-renderer/starter.test.js   # 在 DoTodo-learning 里运行
 ```
 
 习题**不在** `npm test` 范围内，做不做都不影响应用运行。
@@ -210,7 +211,7 @@ npm run acceptance   # 准备隔离的验收数据并打印启动命令（不动
 | macOS | 代码路径已写好（`CommandOrControl`、登录项、`desktop` 层级的差异说明），但**尚未在 macOS 上构建和验证**。签名、公证和 `dist:mac` 待第 9 课 |
 
 关于 Electron 应用的体积：安装后约 360 MB，其中业务代码只有二十几 KB，其余是 Chromium 与 Node.js 运行时。
-详细的分类实测数字和「想变小该怎么做」写在[附录](docs/learning/electron/appendix-desktop-stack-and-packaging.md)里。
+详细的分类实测数字和「想变小该怎么做」写在附录（`DoTodo-learning\course\appendix-desktop-stack-and-packaging.md`）里。
 
 ## License
 
