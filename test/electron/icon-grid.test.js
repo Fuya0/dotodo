@@ -100,6 +100,21 @@ test('窗口跑到屏幕外时会被拉回可用区域', () => {
   assert.ok(planned.y >= 0 && planned.y + planned.height <= SCREEN.height, `y 越界：${planned.y}`);
 });
 
+test('可用区域在客户区坐标系里不从 0 开始时，窗口只落在该区域内', () => {
+  // 真机上的形状：桌面窗口的原点在屏幕 (-1920, 0)，所以主屏的可用区域换算成
+  // 客户区坐标是 x 从 1920 到 3840。窗口一开始在客户区 2685 附近。
+  const clientArea = { x: 1920, y: 0, width: 1920, height: 1032 };
+  const planned = planBounds({
+    bounds: { x: 2685, y: 235, width: 390, height: 610 },
+    cell: CELL, origin: ORIGIN, positions: [], screen: clientArea
+  });
+
+  assert.ok(planned, '主屏范围内应该有位置');
+  assert.ok(planned.x >= 1920, `左边越界：${planned.x}`);
+  assert.ok(planned.x + planned.width <= 3840, `右边越界：${planned.x + planned.width}`);
+  assert.equal(((planned.x - ORIGIN.x) % CELL.width + CELL.width) % CELL.width, 0, '仍然对齐网格');
+});
+
 test('副屏在主屏左侧时，吸附落在负坐标那块屏上，不会被拉回主屏', () => {
   // 真实场景：主屏 (0,0) 1920x1080，副屏放在它左边，坐标从 -1920 开始。
   // 旧实现按主屏的 {width,height} 夹位置，会把窗口强行拉回正坐标。
