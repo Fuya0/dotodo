@@ -194,6 +194,8 @@ function createShellController(options) {
   function showWindow() {
     const window = getWindow();
     if (!window || (typeof window.isDestroyed === 'function' && window.isDestroyed())) return false;
+    if (typeof window.isMinimized === 'function' && window.isMinimized() &&
+        typeof window.restore === 'function') window.restore();
     window.show();
     if (typeof window.focus === 'function') window.focus();
     return true;

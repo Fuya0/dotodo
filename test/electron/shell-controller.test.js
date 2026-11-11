@@ -263,6 +263,17 @@ test('托盘菜单的显示与隐藏直接作用在窗口上', () => {
   assert.equal(harness.intents.length, 0);
 });
 
+test('托盘显示会先恢复最小化窗口', () => {
+  const harness = createHarness();
+  let minimized = true;
+  harness.window.isMinimized = () => minimized;
+  harness.window.restore = () => { minimized = false; };
+  harness.controller.initialize();
+  menuItem(harness, '显示在桌面').click();
+  assert.equal(minimized, false);
+  assert.equal(harness.window.visible, true);
+});
+
 test('托盘菜单的退出条目会真正退出应用', () => {
   const harness = createHarness();
   harness.controller.initialize();
