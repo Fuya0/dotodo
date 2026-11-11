@@ -72,18 +72,24 @@ function createWindowController({
     if (!desktopLayer || window.isDestroyed()) return;
     const layout = desktopLayer.iconLayout();
     const area = workArea();
-    const origin = desktopLayer.origin ? desktopLayer.origin() : null;
-    if (!layout || !area || !origin) return;
+    if (!layout || !area) return;
 
-    // 坐标系：图标位置是**桌面客户区**坐标，而 getBounds 给的是**屏幕**坐标。
-    // 把窗口位置和可用区域都减去桌面原点，统一到客户区坐标系再规划、再写回。
-    // 直接混用两套坐标时，副屏放在主屏左边的机器上窗口会被扔到屏幕外。
-    const bounds = window.getBounds();
+    // 坐标系：图标位置是**桌面客户区**坐标，窗口矩形从原生拿的是**屏幕**坐标。
+    // 减去桌面原点，两边统一到客户区坐标系再规划、再写回。
+    //
+    // 为什么不用 getBounds / setBounds：挂进桌面之后 getBounds 每边少 8px，
+    // setBounds 干脆是空操作（实测）。原生的 windowRect / moveWindow 两个方向都准。
+    const hwnd = desktopLayer.hwndOf(window);
+    const screenRect = (hwnd && desktopLayer.windowRect ? desktopLayer.windowRect(hwnd) : null) ||
+      window.getBounds();
+    const origin = desktopLayer.origin ? desktopLayer.origin() : null;
+    if (!origin) return;
+
     const clientBounds = {
-      x: bounds.x - origin.x,
-      y: bounds.y - origin.y,
-      width: bounds.width,
-      height: bounds.height
+      x: screenRect.x - origin.x,
+      y: screenRect.y - origin.y,
+      width: screenRect.width,
+      height: screenRect.height
     };
     const clientArea = {
       x: area.x - origin.x,
@@ -101,15 +107,18 @@ function createWindowController({
     });
     if (!target) return;
 
-    // 相等就停。setBounds 会再发一次 move/resize，靠这一句让来回吸附收敛。
+    // 相等就停。摆一次会再触发一次 move，靠这一句让来回吸附收敛。
     if (clientBounds.x === target.x && clientBounds.y === target.y &&
         clientBounds.width === target.width && clientBounds.height === target.height) {
       return;
     }
 
-    // 交给 Electron 写：它和 Chromium 的窗口缓存是一套的，我们在外面直接 SetWindowPos
-    // 会被它按缓存拽回去。它按父窗口客户区坐标写，正好就是这里算出来的坐标系。
-    window.setBounds(target);
+    // 用原生写：挂进桌面之后 Electron 的 setBounds 是空操作（实测），只有原生有效。
+    // 原生 SetWindowPos 对子窗口按父窗口客户区坐标解释，正好就是这里的坐标系。
+    const moved = hwnd && typeof desktopLayer.moveWindow === 'function'
+      ? desktopLayer.moveWindow(hwnd, target)
+      : false;
+    if (!moved) window.setBounds(target);
   }
 
   /**

@@ -93,7 +93,30 @@ function createDesktopLayer({ native = loadWin32() } = {}) {
     iconLayout: () => (usable ? readIconLayout(native) : null),
 
     /** 桌面窗口在屏幕上的原点；配合 `getBounds` 换算出客户区坐标。 */
-    origin: () => (usable ? desktopOrigin(native) : null)
+    origin: () => (usable ? desktopOrigin(native) : null),
+
+    /**
+     * 窗口当前的矩形（**屏幕坐标**）。
+     *
+     * 不用 `BrowserWindow.getBounds()`：挂进桌面之后它返回的是 Chromium 记的那一份，
+     * 每边比实际窗口窄 8px（实测：实际 20,257 / 380x595，它报 28,257 / 364x587）。
+     * 差这 8px 会让"是否已经对齐"的判断反复失效，位置来回抖。
+     */
+    windowRect: (hwnd) => (usable ? native.getWindowRect(hwnd) : null),
+
+    /**
+     * 把窗口摆到 `rect`（**客户区坐标**，和 `iconLayout` 的图标坐标同一个空间）。
+     *
+     * 只能用原生 `SetWindowPos`：挂进桌面之后 `BrowserWindow.setBounds` 是空操作
+     * （实测调用后位置纹丝不动），而原生这条路有效，且不会被 Chromium 拽回去。
+     */
+    moveWindow: (hwnd, rect) => {
+      if (!usable || !hwnd || !rect) return false;
+      return native.setWindowPos(
+        hwnd, null, rect.x, rect.y, rect.width, rect.height,
+        0x0004 | 0x0010 | 0x0040
+      );
+    }
   });
 }
 

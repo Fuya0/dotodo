@@ -198,9 +198,9 @@ function createAppWindow() {
     desktopLayer,
     // 吸附只按**主屏**的可用区域算。
     //
-    // 用「窗口所在那块屏」看起来更聪明，但启动瞬间窗口还没落定，跟着它跑会被副屏
-    // 带偏（实测：新装时窗口被摆到左屏）。固定主屏的结果是可预期的：它永远待在
-    // 你工作的那块屏上。拖到副屏会被拉回来 —— 这是这台机器上目前已知的限制。
+    // 试过"跟着窗口所在那块屏"：启动时窗口位置还没稳定，`getDisplayMatching` 会返回
+    // 副屏，新装的窗口直接被摆到左屏（实测）。固定主屏是可预期的，代价是多屏用户
+    // 不能把清单放在副屏 —— 这条限制写在 docs/design-notes.md 里。
     workArea: () => screen.getPrimaryDisplay().workArea,
     onDesktopAttachment: (outcome) => {
       // 挂不上是正常的降级，不是错误；但「为什么没贴上」必须能从日志回答，
