@@ -31,6 +31,54 @@ function recoveryFilesIn(directory, label) {
   return fs.readdirSync(directory).filter((entry) => entry.startsWith(`recovery-${label}-`));
 }
 
+test('save preserves a primary that becomes corrupt while running', (context) => {
+  const directory = withDirectory(context);
+  const store = new infrastructure.JsonStateStore(directory);
+  store.save(populatedState());
+  fs.writeFileSync(store.getPaths().primary, '{runtime damage');
+
+  store.save(populatedState('2026-09-14'));
+
+  assert.deepEqual(store.getPreservedCorruptFiles().map((file) => fs.readFileSync(file, 'utf8')), ['{runtime damage']);
+});
+
+test('save refuses to overwrite a corrupt primary that cannot be preserved', (context) => {
+  const directory = withDirectory(context);
+  const store = new infrastructure.JsonStateStore(directory, { copyFileSync: () => { throw new Error('copy failed'); } });
+  store.save(populatedState());
+  fs.writeFileSync(store.getPaths().primary, '{valuable damage');
+
+  assert.throws(() => store.save(populatedState('2026-09-14')), /停止写入|安全保留/);
+  assert.equal(fs.readFileSync(store.getPaths().primary, 'utf8'), '{valuable damage');
+});
+
+test('separate corruptions of the same backup are each preserved', (context) => {
+  const directory = withDirectory(context);
+  const store = new infrastructure.JsonStateStore(directory);
+  store.save(populatedState());
+  store.save(populatedState('2026-09-14'));
+  fs.writeFileSync(store.getPaths().backup, '{first damage');
+  store.save(populatedState('2026-09-15'));
+  fs.writeFileSync(store.getPaths().backup, '{second damage');
+  store.save(populatedState('2026-09-16'));
+
+  assert.deepEqual(store.getPreservedCorruptFiles().map((file) => fs.readFileSync(file, 'utf8')), ['{first damage', '{second damage']);
+});
+
+test('import rejects task IDs that IPC cannot address without changing the saved state', (context) => {
+  const directory = withDirectory(context);
+  const store = new infrastructure.JsonStateStore(directory);
+  const current = populatedState();
+  store.save(current);
+  const invalid = populatedState('2026-09-14');
+  invalid.activeDay.tasks[0].id = ' bad id ';
+  const source = path.join(directory, 'import.json');
+  fs.writeFileSync(source, JSON.stringify(invalid));
+
+  assert.throws(() => store.importFrom(source), /任务 ID/);
+  assert.deepEqual(store.load().state, current);
+});
+
 test('同一份坏文件在一个进程里只保留一次', (context) => {
   // 两份都坏时，坏备份会被发现两次：load() 一次，随后的 save() 轮转备份时又一次。
   // 不去重就会在两个不同的时间点各复制一份，用户看到两个名字不同、内容完全一样的

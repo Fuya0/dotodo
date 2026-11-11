@@ -38,7 +38,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $productName = 'DoTodo'
-$installDirectory = Join-Path $env:TEMP 'dotodo-install-probe'
+$installDirectory = Join-Path $env:TEMP ("dotodo-install-probe-" + [guid]::NewGuid().ToString('N'))
 $smokeDataDirectory = Join-Path $env:TEMP ("dotodo-install-smoke-" + [guid]::NewGuid().ToString('N'))
 $smokeStdout = Join-Path $env:TEMP ("dotodo-install-smoke-" + [guid]::NewGuid().ToString('N') + '.out')
 $smokeStderr = "$smokeStdout.err"
@@ -49,6 +49,7 @@ $startMenuShortcut = Join-Path (Join-Path $env:APPDATA 'Microsoft\Windows\Start 
 $results = New-Object System.Collections.Generic.List[object]
 $script:failures = @()
 $script:uninstallAttempted = $false
+$script:installationStarted = $false
 
 function Write-Section([string]$Title) {
   Write-Host ''
@@ -63,12 +64,13 @@ function Invoke-Step {
   )
   Write-Section $Name
   $started = Get-Date
+  $script:stepSkipped = $false
   try {
     & $Body
     $elapsed = (Get-Date) - $started
     $results.Add([pscustomobject]@{
       Step    = $Name
-      Status  = 'passed'
+      Status  = $(if ($script:stepSkipped) { 'skipped' } else { 'passed' })
       Seconds = [Math]::Round($elapsed.TotalSeconds, 1)
     })
   } catch {
@@ -81,6 +83,7 @@ function Invoke-Step {
     Write-Host "✗ $Name" -ForegroundColor Red
     Write-Host "  $($_.Exception.Message)" -ForegroundColor Red
     $script:failures += $Name
+    throw
   }
 }
 
@@ -115,31 +118,66 @@ function Get-UserDataFingerprint {
   # 目录可能不存在（全新机器），那就返回空。
   $statePath = Join-Path $realUserDataDirectory 'state.json'
   if (-not (Test-Path $statePath)) { return $null }
-  $item = Get-Item $statePath
-  return "$($item.Length):$($item.LastWriteTimeUtc.Ticks)"
+  return (Get-FileHash -LiteralPath $statePath -Algorithm SHA256).Hash
+}
+
+function Set-StepSkipped([string]$Reason) {
+  $script:stepSkipped = $true
+  Write-Host "  跳过：$Reason" -ForegroundColor Yellow
+}
+
+function Assert-InstallPreconditions {
+  $existing = @(Get-DoDoTodoUninstallEntry)
+  if ($existing.Count -gt 0) {
+    throw '已经装过 DoTodo。请先卸载，或在干净机器上跑这个脚本。'
+  }
+  foreach ($path in @($installDirectory, $desktopShortcut, $startMenuShortcut,
+      (Join-Path $env:LOCALAPPDATA "Programs\$productName"))) {
+    if (Test-Path -LiteralPath $path) { throw "已有路径，拒绝覆盖：$path" }
+  }
+}
+
+function Invoke-ProbeInstall {
+  # 再检查一次；绝不删除或复用预存目录。
+  Assert-InstallPreconditions
+  $arguments = "/S /D=$installDirectory"
+  # NSIS 要求 /D= 是最后一个参数，且不加引号。
+  $process = Start-Process -FilePath $script:installerPath -ArgumentList $arguments -PassThru -ErrorAction Stop
+  # 只有启动成功后才拥有本次安装的收尾权限。
+  $script:installationStarted = $true
+  $process.WaitForExit()
+  if (-not (Test-Path -LiteralPath $installDirectory)) { throw "安装后目录不存在：$installDirectory" }
+}
+
+function Get-ProbeQuietUninstallCommand {
+  $root = [IO.Path]::GetFullPath($installDirectory).TrimEnd('\')
+  foreach ($entry in @(Get-DoDoTodoUninstallEntry)) {
+    $quiet = Get-RegistryValue $entry 'QuietUninstallString'
+    if (-not $quiet) { continue }
+    $parsed = [regex]::Match($quiet.Trim(), '^"([^"\r\n]+)"\s*(.*)$')
+    if (-not $parsed.Success) { continue }
+    $exe = $parsed.Groups[1].Value
+    if (-not [IO.Path]::IsPathRooted($exe)) { continue }
+    try { $full = [IO.Path]::GetFullPath($exe) } catch { continue }
+    # 规范化后要求直接位于本次目录，不能靠子串、图标或首条注册表项推断。
+    if (-not [string]::Equals([IO.Path]::GetDirectoryName($full), $root, [StringComparison]::OrdinalIgnoreCase)) { continue }
+    if ([IO.Path]::GetExtension($full) -ine '.exe') { continue }
+    return [pscustomobject]@{ Entry = $entry; FilePath = $full; Arguments = $parsed.Groups[2].Value.Trim() }
+  }
+  return $null
 }
 
 function Invoke-SilentUninstall {
-  if (-not (Test-Path $installDirectory)) { return $true }
-
-  # 优先用注册表里的 QuietUninstallString：那正是 Windows「设置 → 应用」
-  # 会执行的命令，我们要验的就是它管不管用。
-  $entry = @(Get-DoDoTodoUninstallEntry) | Select-Object -First 1
-  $quiet = Get-RegistryValue $entry 'QuietUninstallString'
-  $started = $false
-  if ($quiet) {
-    $parsed = [regex]::Match($quiet.Trim(), '^"([^"]+)"\s*(.*)$')
-    if ($parsed.Success) {
-      Start-Process -FilePath $parsed.Groups[1].Value -ArgumentList $parsed.Groups[2].Value.Trim() `
-        -ErrorAction SilentlyContinue | Out-Null
-      $started = $true
-    }
-  }
-  if (-not $started) {
-    $uninstaller = Get-ChildItem -Path $installDirectory -Filter 'Uninstall*.exe' -ErrorAction SilentlyContinue |
-      Select-Object -First 1
+  if (-not $script:installationStarted) { return $false }
+  if (-not (Test-Path -LiteralPath $installDirectory)) { return $true }
+  $command = Get-ProbeQuietUninstallCommand
+  if ($command) {
+    Start-Process -FilePath $command.FilePath -ArgumentList $command.Arguments -ErrorAction Stop | Out-Null
+  } else {
+    $uninstaller = Get-ChildItem -LiteralPath $installDirectory -Filter 'Uninstall*.exe' -File -ErrorAction Stop |
+      Where-Object { -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) } | Select-Object -First 1
     if (-not $uninstaller) { return $false }
-    Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -ErrorAction SilentlyContinue | Out-Null
+    Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -ErrorAction Stop | Out-Null
   }
 
   # NSIS 的卸载器会把自己复制到临时目录再重新启动，所以第一次返回不代表卸完了。
@@ -149,6 +187,19 @@ function Invoke-SilentUninstall {
     if (-not (Test-Path $installDirectory)) { return $true }
   }
   return $false
+}
+
+function Invoke-ProbeCleanup {
+  # 不管前面哪一步失败，都不要把装好的东西留在机器上。
+  if ($script:installationStarted -and -not $KeepInstalled -and -not $script:uninstallAttempted -and (Test-Path $installDirectory)) {
+    Write-Host ''
+    Write-Host '前面有步骤失败，收尾卸载……' -ForegroundColor Yellow
+    if (Invoke-SilentUninstall) {
+      Write-Host '  已卸载。' -ForegroundColor Yellow
+    } else {
+      Write-Host "  ✗ 自动卸载没成功，请手动运行：$installDirectory\Uninstall $productName.exe" -ForegroundColor Red
+    }
+  }
 }
 
 Write-Host "$productName Windows 安装器验证" -ForegroundColor White
@@ -190,35 +241,12 @@ try {
   }
 
   Invoke-Step '没有已存在的安装会被破坏' {
-    # 卸载信息是按 appId/productName 写在注册表里的。如果用户已经装了 DoTodo，
-    # 我们再静默装一次会覆盖同一个键，卸载时就会把用户那套的卸载入口删掉。
-    # 这种事不能默默做，直接拒绝。
-    $existing = @(Get-DoDoTodoUninstallEntry)
-    if ($existing.Count -gt 0) {
-      # electron-builder 不写 InstallLocation，所以位置从卸载命令里取。
-      $locations = ($existing | ForEach-Object {
-          $line = Get-RegistryValue $_ 'UninstallString'
-          if ($line) { $line } else { Get-RegistryValue $_ 'DisplayName' }
-        }) -join '；'
-      throw "已经装过 DoTodo（$locations）。请先卸载，或在干净机器上跑这个脚本。"
-    }
-    $programFilesCopy = Join-Path $env:LOCALAPPDATA "Programs\$productName"
-    if (Test-Path $programFilesCopy) {
-      throw "默认安装位置已有内容：$programFilesCopy。请先清理。"
-    }
+    Assert-InstallPreconditions
     Write-Host '  没有检测到已存在的安装，可以安全地装到临时目录。'
   }
 
   Invoke-Step '静默安装到临时目录' {
-    Remove-Item $installDirectory -Recurse -Force -ErrorAction SilentlyContinue
-    $arguments = "/S /D=$installDirectory"
-    # /D= 必须是最后一个参数，而且不能加引号：NSIS 把 /D= 之后整行都当成路径。
-    # Start-Process 传单个字符串时是原样交给 CreateProcess 的，正合要求。
-    Start-Process -FilePath $script:installerPath -ArgumentList $arguments -Wait -ErrorAction SilentlyContinue | Out-Null
-
-    if (-not (Test-Path $installDirectory)) {
-      throw "安装后目录不存在：$installDirectory"
-    }
+    Invoke-ProbeInstall
   }
 
   Invoke-Step '程序文件与卸载器到位' {
@@ -246,36 +274,10 @@ try {
   }
 
   Invoke-Step '注册表写入卸载信息' {
-    $entries = @(Get-DoDoTodoUninstallEntry)
-    if ($entries.Count -eq 0) {
-      throw "$productName 没有出现在注册表的卸载项里。"
-    }
-    $entry = $entries[0]
-    Write-Host ("  DisplayName : {0}" -f (Get-RegistryValue $entry 'DisplayName'))
-    $version = Get-RegistryValue $entry 'DisplayVersion'
-    if ($version) { Write-Host "  DisplayVersion: $version" }
-    $installLocation = Get-RegistryValue $entry 'InstallLocation'
-    if ($installLocation) { Write-Host "  InstallLocation: $installLocation" }
-
-    # electron-builder 的按用户安装**不写** InstallLocation，所以不能要求它有。
-    # 真正该验的是「这个卸载项指向我们刚装的那个目录」——否则点卸载会去删别处。
-    # 卸载命令和图标路径都带着绝对路径，用它们判断。
-    $evidence = @(
-      (Get-RegistryValue $entry 'UninstallString')
-      (Get-RegistryValue $entry 'QuietUninstallString')
-      (Get-RegistryValue $entry 'DisplayIcon')
-    ) | Where-Object { $_ }
-    if ($evidence.Count -eq 0) {
-      throw '卸载项里既没有卸载命令也没有图标路径，无法确认它指向哪里。'
-    }
-    $pointsAtUs = $false
-    foreach ($line in $evidence) {
-      if ($line -like "*$installDirectory*") { $pointsAtUs = $true }
-      Write-Host "  $line"
-    }
-    if (-not $pointsAtUs) {
-      throw "卸载项没有指向这次安装的目录（$installDirectory）。"
-    }
+    $command = Get-ProbeQuietUninstallCommand
+    if (-not $command) { throw '找不到可执行文件位于本次安装目录的 QuietUninstallString。' }
+    Write-Host ("  DisplayName: {0}" -f (Get-RegistryValue $command.Entry 'DisplayName'))
+    Write-Host ("  QuietUninstallString: {0} {1}" -f $command.FilePath, $command.Arguments)
   }
 
   Invoke-Step '装好的副本能启动' {
@@ -338,7 +340,7 @@ try {
       # 卸载**不能**删用户数据：重装之后清单还得在。
       # 这里同时证明脚本自己也没碰过它 —— 指纹是脚本开始前记的。
       if ($null -eq $dataFingerprintBefore) {
-        Write-Host '  真实数据目录本来就不存在，这一条无从判断（不代表通过）。' -ForegroundColor Yellow
+        Set-StepSkipped '本来没有 state.json，无法验证卸载保留数据。'
         return
       }
       if (-not (Test-Path $realUserDataDirectory)) {
@@ -348,24 +350,17 @@ try {
       if ($after -ne $dataFingerprintBefore) {
         throw "用户数据被改动了（$dataFingerprintBefore → $after）。这个脚本不该碰它。"
       }
-      Write-Host '  用户数据目录还在，且内容和时间戳都没变。'
+      Write-Host '  用户数据目录还在，state.json 的 SHA256 未变。'
     }
   } else {
     Write-Host ''
     Write-Host '按 -KeepInstalled 保留安装，跳过卸载步骤。' -ForegroundColor Yellow
     Write-Host "  手工卸载：$installDirectory"
   }
+} catch {
+  Write-Host ("验证已停止：{0}" -f $_.Exception.Message) -ForegroundColor Red
 } finally {
-  # 不管前面哪一步失败，都不要把装好的东西留在机器上。
-  if (-not $KeepInstalled -and -not $script:uninstallAttempted -and (Test-Path $installDirectory)) {
-    Write-Host ''
-    Write-Host '前面有步骤失败，收尾卸载……' -ForegroundColor Yellow
-    if (Invoke-SilentUninstall) {
-      Write-Host '  已卸载。' -ForegroundColor Yellow
-    } else {
-      Write-Host "  ✗ 自动卸载没成功，请手动运行：$installDirectory\Uninstall $productName.exe" -ForegroundColor Red
-    }
-  }
+  Invoke-ProbeCleanup
 }
 
 Write-Section '验证汇总'
@@ -376,7 +371,10 @@ if ($script:failures.Count -gt 0) {
   exit 1
 }
 
-Write-Host '✓ 安装器自动验证步骤通过。' -ForegroundColor Green
+if (@($results | Where-Object { $_.Status -eq 'skipped' }).Count -gt 0) {
+  Write-Host '部分验证已跳过：没有原始 state.json，尚未验证卸载保留真实用户数据。' -ForegroundColor Yellow
+}
+Write-Host '✓ 未跳过的安装器自动验证步骤通过。' -ForegroundColor Green
 Write-Host ''
 Write-Host '这**不能**替代干净机器验证。仍然只能人工的部分：' -ForegroundColor Yellow
 Write-Host '  docs/release/windows-release-checklist.md 第 5 节'

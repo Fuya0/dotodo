@@ -299,6 +299,13 @@ test('把第 1 行拖到第 3 行，结果就是跟第 3 行换位', () => {
   assert.deepEqual(reordered, ['B', 'C', 'A', 'D', 'E']);
 });
 
+test('指针仍停在被拖行留下的空隙时保持原位置，不跳到末尾', () => {
+  const others = [{ top: 0, bottom: 40 }, { top: 80, bottom: 120 }];
+  assert.deepEqual(resolveDropIndex(others, 60, 1), {
+    targetIndex: 1, markerIndex: -1, side: null
+  });
+});
+
 test('resolveDropIndex 对空列表和非法输入返回 -1', () => {
   assert.deepEqual(resolveDropIndex([], 5, 0), { targetIndex: -1, markerIndex: -1, side: null });
   assert.deepEqual(resolveDropIndex(null, 5, 0), { targetIndex: -1, markerIndex: -1, side: null });

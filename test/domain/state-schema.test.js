@@ -85,6 +85,15 @@ test('validateState accepts a complete state with reciprocal continuation links'
   assert.deepEqual(result.state, state);
 });
 
+test('validateState rejects task identifiers that IPC cannot address', () => {
+  for (const id of [' leading', 'trailing ', 'control\u0001', 'x'.repeat(129)]) {
+    const state = validLinkedState();
+    state.activeDay.tasks[0].id = id;
+    state.history[0].tasks[0].continuedToTaskId = id;
+    assert.equal(schema.validateState(state).ok, false, JSON.stringify(id));
+  }
+});
+
 test('validateState rejects inconsistent tasks, settings, history and continuation links', async (context) => {
   const cases = [
     ['completion mismatch', (state) => { state.activeDay.tasks[0].completed = true; }],

@@ -60,7 +60,10 @@ function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareSt
       // `applied: true` 是关键：领域层已经接受了这次修改（快照里有它），只有落盘失败了。
       // 渲染进程分不清"引擎拒绝"和"存盘失败"的话，就会把用户刚打的字留在输入框里，
       // 而那条任务其实已经出现在列表上了——再按一次回车就会重复一条。
-      return failure(`保存失败：${errorMessage(error)}`, result.snapshot, { applied: true });
+      return failure(`保存失败：${errorMessage(error)}`, result.snapshot, {
+        applied: true,
+        ...(result.undoToken ? { undoToken: result.undoToken } : {})
+      });
     }
   }
 

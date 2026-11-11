@@ -110,11 +110,21 @@ function resolveDropIndex(rows, clientY, fromIndex) {
   const hovered = rows.findIndex((row) => clientY >= row.top && clientY <= row.bottom);
 
   if (hovered === -1) {
-    // 落在所有行之外的空白里：上面就是开头，下面就是末尾。
+    // 任务行被拿走后留下的原位置是唯一的行间空隙；鼠标仍停在这里时保持原下标。
+    const previous = rows[fromIndex - 1];
+    const next = rows[fromIndex];
+    if (previous && next && clientY > previous.bottom && clientY < next.top) {
+      return { targetIndex: fromIndex, markerIndex: -1, side: null };
+    }
+
+    // 只有列表上下方的空白才代表开头或末尾。
     if (clientY < rows[0].top) {
       return { targetIndex: 0, markerIndex: 0, side: 'before' };
     }
-    return { targetIndex: rows.length, markerIndex: rows.length - 1, side: 'after' };
+    if (clientY > rows[rows.length - 1].bottom) {
+      return { targetIndex: rows.length, markerIndex: rows.length - 1, side: 'after' };
+    }
+    return { targetIndex: fromIndex, markerIndex: -1, side: null };
   }
 
   // 还原这一行在完整列表里的下标（others 里排在 fromIndex 之后的都往后错了一位）

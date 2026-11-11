@@ -25,7 +25,7 @@ function formatLocalInstant(date = new Date(), timezoneOffsetMinutes = date.getT
  * 所以需要一个到点就翻页的定时器。这里只算延迟，真正调度在 main.js。
  *
  * @param {Date} now 当前时间。
- * @returns {number} 到下一个本地零点的毫秒数，范围是 (0, 86400000]。
+ * @returns {number} 到下一个本地零点的毫秒数，包含夏令时切换日的 23/25 小时间隔。
  */
 function millisecondsUntilNextMidnight(now = new Date()) {
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) {
@@ -35,9 +35,9 @@ function millisecondsUntilNextMidnight(now = new Date()) {
   const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
   const delay = nextMidnight.getTime() - now.getTime();
 
-  // 夏令时切换当天可能不是整整 24 小时；夹一下，保证是一个正的、合理的延迟。
+  // 保留本地日历的真实间隔：DST 切换日可能是 23 或 25 小时。
   if (!Number.isFinite(delay) || delay <= 0) return 1;
-  return Math.min(delay, 86_400_000);
+  return delay;
 }
 
 module.exports = { formatLocalInstant, millisecondsUntilNextMidnight };

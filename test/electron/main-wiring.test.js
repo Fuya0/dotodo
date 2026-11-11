@@ -36,6 +36,14 @@ test('退出时三个控制器都被处置', () => {
   }
 });
 
+test('零点轮转失败时仍广播快照以呈现 dirty 状态', () => {
+  const check = main.match(/function checkCurrentDay\(\)[\s\S]*?\n\}/);
+  assert.ok(check, '找不到当天校正处理器。');
+  assert.match(check[0], /finally\s*\{[\s\S]*broadcastSnapshot\(\)/);
+  assert.match(main, /createDayRolloverScheduler/);
+  assert.match(main, /powerMonitor/);
+});
+
 test('壳层初始化发生在窗口创建之后', () => {
   // bindWindow 需要窗口已经存在；initialize 还会顺便在托盘创建失败时记警告。
   const initialize = main.indexOf('createAppWindow();');

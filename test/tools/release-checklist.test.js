@@ -36,10 +36,7 @@ test('发布清单写的 verify:win 步数与脚本一致', () => {
     checklist.includes(`${expected}：`),
     `第 1 节的步骤列表应该以「${expected}：」开头（脚本现在是 ${steps.length} 步）。`
   );
-  assert.ok(
-    checklist.includes(`${expected}全绿`),
-    `进度表里应该写「${expected}全绿」（脚本现在是 ${steps.length} 步）。`
-  );
+  // 进度表记录当前验证状态，不要求永远声称通过；这里只核对执行步骤。
 });
 
 test('发布清单写的 verify:installer 步数与脚本一致', () => {
@@ -49,10 +46,7 @@ test('发布清单写的 verify:installer 步数与脚本一致', () => {
     checklist.includes(`${expected}：`),
     `第 5 节应该以「${expected}：」开头（脚本现在是 ${steps.length} 步）。`
   );
-  assert.ok(
-    checklist.includes(`${expected}全绿`),
-    `进度表里应该写「${expected}全绿」（脚本现在是 ${steps.length} 步）。`
-  );
+  // 进度表记录当前验证状态，不要求永远声称通过；这里只核对执行步骤。
 });
 
 test('发布清单第 1 节点名了 verify:win 的每一步', () => {

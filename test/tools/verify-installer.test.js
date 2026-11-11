@@ -2,6 +2,34 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+
+// Parse without dot-sourcing: no installer, registry, shortcut or application code runs.
+function runFunctions(body) {
+  const setup = `
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$tokens = $null; $parseErrors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile('${scriptPath.replace(/'/g, "''")}', [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
+$ast.FindAll({param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst]}, $false) | ForEach-Object { . ([scriptblock]::Create($_.Extent.Text)) }
+$results = New-Object System.Collections.Generic.List[object]
+$script:failures = @()
+$script:uninstallAttempted = $false
+$script:installationStarted = $false
+$productName = 'DoTodo'
+$KeepInstalled = $false
+# Any accidental call outside the intended seam fails without touching the host.
+function Start-Process { throw 'unexpected process launch' }
+function Stop-Process { throw 'unexpected process termination' }
+function Remove-Item { throw 'unexpected deletion' }
+function Get-ItemProperty { throw 'unexpected registry read' }
+`;
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(setup + body + '\nexit 0', 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 20000 });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  return result.stdout;
+}
 
 const repositoryRoot = path.join(__dirname, '..', '..');
 const scriptPath = path.join(repositoryRoot, 'tools', 'verify-installer.ps1');
@@ -15,6 +43,128 @@ function codeLines() {
     .map((line, index) => ({ line: line.trim(), number: index + 1 }))
     .filter((entry) => entry.line.length > 0 && !entry.line.startsWith('#'));
 }
+
+test('步骤失败会记录失败并抛出，阻止下一步', () => {
+  runFunctions(`
+$script:nextRan = $false
+try {
+  Invoke-Step 'guard' { throw 'blocked' }
+  $script:nextRan = $true
+} catch { if ($_.Exception.Message -ne 'blocked') { throw } }
+if ($script:nextRan) { throw 'failure did not stop next step' }
+if ($results.Count -ne 1 -or $results[0].Status -ne 'failed') { throw 'failure not recorded' }
+`);
+});
+
+test('安装前拒绝预存目录与快捷方式，安装失败前不允许清理', () => {
+  runFunctions(`
+$installDirectory = 'C:\\probe\\owned'
+$desktopShortcut = 'C:\\fake-desktop\\DoTodo.lnk'
+$startMenuShortcut = 'C:\\fake-menu\\DoTodo.lnk'
+$env:LOCALAPPDATA = 'C:\\fake-local'
+function Get-DoDoTodoUninstallEntry { @() }
+$script:existingPath = $installDirectory
+function Test-Path { param($LiteralPath) $LiteralPath -eq $script:existingPath }
+function Start-Process { throw 'must not launch' }
+function Remove-Item { throw 'must not delete' }
+foreach ($p in @($installDirectory, $desktopShortcut, $startMenuShortcut)) {
+  $script:existingPath = $p
+  $caught = $false
+  try { Assert-InstallPreconditions } catch { $caught = $true }
+  if (-not $caught) { throw "preexisting path accepted: $p" }
+}
+$script:existingPath = $installDirectory
+$caught = $false
+try { Invoke-ProbeInstall } catch { $caught = $true }
+if (-not $caught -or $script:installationStarted) { throw 'installation ownership claimed' }
+function Invoke-SilentUninstall { throw 'must not uninstall' }
+Invoke-ProbeCleanup
+`);
+});
+
+test('卸载只执行本次目录的命令，不选首项或相邻前缀路径', () => {
+  runFunctions(`
+$installDirectory = 'C:\\probe\\owned'
+$script:installationStarted = $true
+$script:launched = @()
+$script:pathExists = $true
+function Test-Path { $script:pathExists }
+function Get-DoDoTodoUninstallEntry {
+  [pscustomobject]@{ QuietUninstallString = '"C:\\probe\\owned-other\\Uninstall.exe" /S' }
+  [pscustomobject]@{ QuietUninstallString = '"C:\\probe\\owned\\Uninstall.exe" /S' }
+}
+function Start-Process { param($FilePath, $ArgumentList) $script:launched += $FilePath; $script:pathExists = $false }
+function Start-Sleep {}
+if (-not (Invoke-SilentUninstall)) { throw 'uninstall failed' }
+if ($script:launched.Count -ne 1 -or $script:launched[0] -ne 'C:\\probe\\owned\\Uninstall.exe') { throw 'wrong uninstall launched' }
+$script:launched = @(); $script:pathExists = $true
+function Get-DoDoTodoUninstallEntry { [pscustomobject]@{ QuietUninstallString = '"C:\\probe\\owned\\..\\other\\Uninstall.exe" /S' } }
+function Get-ChildItem { @() }
+if (Invoke-SilentUninstall) { throw 'foreign uninstaller accepted' }
+if ($script:launched.Count) { throw 'foreign process launched' }
+$script:installationStarted = $false
+if (Invoke-SilentUninstall) { throw 'unowned install accepted' }
+`);
+});
+
+test('只有安装进程成功启动后才允许收尾，并遵守保留安装', () => {
+  runFunctions(`
+$installDirectory = 'C:\\probe\\owned'
+$script:installerPath = 'C:\\fake\\setup.exe'
+function Assert-InstallPreconditions {}
+function Start-Process { throw 'launch failed' }
+try { Invoke-ProbeInstall } catch { if ($_.Exception.Message -ne 'launch failed') { throw } }
+if ($script:installationStarted) { throw 'failed launch claimed ownership' }
+$script:cleanupCount = 0
+function Test-Path { $true }
+function Invoke-SilentUninstall { $script:cleanupCount++; return $true }
+Invoke-ProbeCleanup
+if ($script:cleanupCount) { throw 'cleanup without launch' }
+function Start-Process { $p = [pscustomobject]@{}; $p | Add-Member ScriptMethod WaitForExit {}; return $p }
+Invoke-ProbeInstall
+if (-not $script:installationStarted) { throw 'successful launch not recorded' }
+Invoke-ProbeCleanup
+if ($script:cleanupCount -ne 1) { throw 'owned install not cleaned' }
+$KeepInstalled = $true
+Invoke-ProbeCleanup
+if ($script:cleanupCount -ne 1) { throw 'keep installed ignored' }
+`);
+});
+
+test('安装目录每次求值产生独立GUID路径且没有删除安装目录的指令', () => {
+  runFunctions(`
+$assignment = $ast.Find({param($n) $n -is [System.Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -eq '$installDirectory'}, $false)
+if (-not $assignment) { throw 'missing install directory assignment' }
+$expression = [scriptblock]::Create($assignment.Right.Extent.Text)
+$first = & $expression; $second = & $expression
+if ($first -eq $second -or [IO.Path]::GetFileName($first) -notmatch '^dotodo-install-probe-[0-9a-f]{32}$') { throw 'path is not unique GUID' }
+`);
+  assert.doesNotMatch(text, /Remove-Item[^\r\n]*\$installDirectory/);
+});
+
+test('缺少原始数据显式跳过而不是通过', () => {
+  runFunctions(`
+$script:stepSkipped = $false
+Invoke-Step 'data' { Set-StepSkipped 'no original state' }
+if ($results.Count -ne 1 -or $results[0].Status -ne 'skipped') { throw 'missing state falsely passed' }
+`);
+});
+
+test('用户数据指纹为SHA256，可检测相同长度时间戳的内容变化', () => {
+  const os = require('node:os');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'dotodo-fingerprint-test-'));
+  const fixture = path.join(directory, 'state.json');
+  try {
+    fs.writeFileSync(fixture, 'one');
+    const original = fs.statSync(fixture);
+    const first = runFunctions(`$realUserDataDirectory = '${directory.replace(/'/g, "''")}'; Write-Output (Get-UserDataFingerprint)`);
+    fs.writeFileSync(fixture, 'two');
+    fs.utimesSync(fixture, original.atime, original.mtime);
+    const second = runFunctions(`$realUserDataDirectory = '${directory.replace(/'/g, "''")}'; Write-Output (Get-UserDataFingerprint)`);
+    assert.notEqual(first, second);
+    assert.match(first.trim(), /^[A-F0-9]{64}$/i);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
 
 test('verify-installer.ps1 必须保存为带 BOM 的 UTF-8', () => {
   // 和 verify-electron.ps1 同样的原因：文件里全是中文，Windows PowerShell 5.1
@@ -53,9 +203,8 @@ test('卸载项不要求 InstallLocation 存在', () => {
     [],
     '不要因为缺少 InstallLocation 就判定失败。'
   );
-  // 判断「卸载项指向哪里」改用卸载命令和图标路径。
-  assert.match(text, /UninstallString/);
-  assert.match(text, /pointsAtUs/);
+  // 可执行文件路径的真实行为由上面的隔离卸载测试覆盖。
+  assert.match(text, /Get-ProbeQuietUninstallCommand/);
 });
 
 test('卸载走注册表里的 QuietUninstallString', () => {
@@ -67,7 +216,16 @@ test('检测到已有安装时拒绝动手', () => {
   // 我们静默装到临时目录，但卸载信息是按 appId 写在注册表里的同一个键。
   // 如果用户自己装过 DoTodo，我们再装一次就会覆盖他的卸载入口。
   assert.match(text, /已经装过 DoTodo/);
-  assert.match(text, /已经装过 DoTodo[\s\S]{0,200}throw/);
+  runFunctions(`
+function Get-DoDoTodoUninstallEntry { [pscustomobject]@{ DisplayName = 'DoTodo 1.0' } }
+function Test-Path { throw 'must not reach path checks' }
+$caught = $false
+try { Assert-InstallPreconditions } catch {
+  if ($_.Exception.Message -notlike '*DoTodo*') { throw }
+  $caught = $true
+}
+if (-not $caught) { throw 'existing installation accepted' }
+`);
 });
 
 test('失败也要把装好的东西收尾卸掉', () => {

@@ -69,7 +69,7 @@ function createWindowController({
    * 这条路径上的任何失败都只该表现为"窗口待在原地"，不该有别的后果。
    */
   function applyDesktopGrid() {
-    if (!desktopLayer || window.isDestroyed()) return;
+    if (!desktopLayer || !desktopAttachment?.attached || window.isDestroyed()) return;
     const layout = desktopLayer.iconLayout();
     const area = workArea();
     if (!layout || !area) return;
@@ -147,7 +147,11 @@ function createWindowController({
       try {
         // 拖完/缩完之后先吸附回网格，再记位置 —— 记下来的就是最终那一份。
         applyDesktopGrid();
-        onBoundsChanged(window.getBounds());
+        const hwnd = desktopAttachment?.attached ? desktopLayer.hwndOf(window) : null;
+        const actual = hwnd && typeof desktopLayer.windowRect === 'function'
+          ? desktopLayer.windowRect(hwnd)
+          : null;
+        onBoundsChanged(actual || window.getBounds());
       } catch (error) {
         onError(error);
       }

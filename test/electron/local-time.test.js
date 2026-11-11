@@ -33,6 +33,18 @@ test('millisecondsUntilNextMidnight 给出到下一个本地零点的毫秒数',
   assert.equal(timeModule.millisecondsUntilNextMidnight(now), 3_600_000);
 });
 
+test('millisecondsUntilNextMidnight 保留夏令时结束日的 25 小时本地间隔', () => {
+  const previousTimezone = process.env.TZ;
+  process.env.TZ = 'America/New_York';
+  try {
+    const now = new Date(2026, 10, 1, 0, 0, 0, 0);
+    assert.equal(timeModule.millisecondsUntilNextMidnight(now), 25 * 3_600_000);
+  } finally {
+    if (previousTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTimezone;
+  }
+});
+
 test('millisecondsUntilNextMidnight 在零点整给出整整一天，而不是 0', () => {
   // 正好站在零点上时，"下一个零点"是明天，不是"现在"——否则定时器会立刻空转。
   const midnight = new Date(2026, 8, 15, 0, 0, 0, 0);

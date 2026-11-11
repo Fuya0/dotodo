@@ -63,7 +63,8 @@ function validateState(value) {
     }
 
     for (const task of day.tasks) {
-      if (!task || typeof task.id !== 'string' || !task.id || taskIds.has(task.id)) {
+      if (!task || typeof task.id !== 'string' || !task.id || task.id.length > 128 ||
+          task.id !== task.id.trim() || /[\u0000-\u001f\u007f]/.test(task.id) || taskIds.has(task.id)) {
         return invalid('任务 ID 无效或重复。');
       }
       taskIds.add(task.id);

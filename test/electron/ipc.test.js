@@ -182,6 +182,24 @@ test('failed commands are not persisted and save failures become serializable re
   assert.equal(result.applied, true);
 });
 
+test('a delete remains undoable when its state was applied but saving failed', async () => {
+  const undoToken = 'undo-after-save-failure';
+  const brokenDisk = createHarness({
+    engine: {
+      deleteTodayTask: () => ({ ok: true, snapshot: { marker: 'deleted-in-memory' }, undoToken })
+    },
+    store: { save: () => { throw new Error('disk full'); } }
+  });
+  register(brokenDisk);
+
+  const result = await invoke(brokenDisk, 'task:delete-today', 'task-1');
+
+  assert.equal(result.ok, false);
+  assert.equal(result.applied, true);
+  assert.equal(result.undoToken, undoToken, '保存失败不能丢弃领域引擎签发的撤销令牌');
+  assert.deepEqual(result.snapshot, { marker: 'deleted-in-memory' });
+});
+
 test('engine rejections are not marked as applied', async () => {
   const harness = createHarness({
     engine: { addTask: () => ({ ok: false, error: '领域拒绝', snapshot: { marker: 'same' } }) }

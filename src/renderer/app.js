@@ -55,10 +55,15 @@ const dom = {
   closeButton: document.querySelector('#closeButton')
 };
 
+let statusRequestRevision = 0;
+
 const state = {
   snapshot: null,
   page: 'today',
   editingId: null,
+  editOriginal: null,
+  restoringEdit: false,
+  submitting: false,
   undoToken: null,
   undoTimer: null,
   messageTimer: null,
@@ -86,8 +91,30 @@ async function runCommand(promise) {
 }
 
 function applySnapshot(snapshot) {
+  const editor = state.editingId !== null ? findRow(state.editingId)?.querySelector('.edit-input') : null;
+  const edit = editor && {
+    id: state.editingId,
+    original: state.editOriginal,
+    value: editor.value,
+    focused: document.activeElement === editor,
+    start: editor.selectionStart,
+    end: editor.selectionEnd,
+    direction: editor.selectionDirection
+  };
+  const sameDay = state.snapshot?.activeDay.date === snapshot.activeDay.date;
+  const stillExists = edit && sameDay && snapshot.activeDay.tasks.some((task) => task.id === edit.id);
+  cancelDrag();
+  state.restoringEdit = true;
+  state.editingId = null;
+  state.editOriginal = null;
   state.snapshot = snapshot;
   render();
+  state.restoringEdit = false;
+  if (stillExists) {
+    beginEdit(edit.id, edit);
+  } else if (edit && edit.value !== edit.original) {
+    showMessage(sameDay ? '任务已删除或不存在，未提交的编辑草稿已丢弃。' : '日期已变化，未提交的编辑草稿已丢弃。');
+  }
   // 运行期状态（保存失败、只存在内存里、数据损坏）是主进程算的，启动时只取过一次。
   // 每次应用快照顺手刷新一次，用户才会在出问题之后看到那条持久提示——
   // 否则错误条 6 秒后消失，用户会以为一切正常，继续往一个存不下去的清单里加东西。
@@ -263,7 +290,7 @@ const editTask = (id, text) => runCommand(window.dotodo.editTask(id, text));
 
 async function deleteTodayTask(id) {
   const result = await runCommand(window.dotodo.deleteTodayTask(id));
-  if (result && result.ok && result.undoToken) {
+  if (result && (result.ok || result.applied) && result.undoToken) {
     state.undoToken = result.undoToken;
     showUndoBar('已删除一项任务。');
   }
@@ -271,7 +298,7 @@ async function deleteTodayTask(id) {
 
 async function deleteHistoryTask(date, id) {
   const result = await runCommand(window.dotodo.deleteHistoryTask(date, id));
-  if (result && result.ok && result.undoToken) {
+  if (result && (result.ok || result.applied) && result.undoToken) {
     state.undoToken = result.undoToken;
     showUndoBar('已删除一项历史任务。');
   }
@@ -288,29 +315,32 @@ async function undoLastDelete() {
 
 /* ---------- 行内编辑 ---------- */
 
-function beginEdit(id) {
+function beginEdit(id, saved = null) {
   if (state.editingId !== null) return;
   const item = findRow(id);
   const text = item?.querySelector('.todo-text');
   if (!item || !text) return;
 
-  const original = text.textContent;
+  const original = saved ? saved.original : text.textContent;
   const input = document.createElement('input');
   input.className = 'edit-input';
   input.maxLength = 240;
-  input.value = original;
+  input.value = saved ? saved.value : original;
   input.setAttribute('aria-label', '编辑任务');
   text.replaceWith(input);
 
   state.editingId = id;
-  input.focus();
-  input.select();
+  state.editOriginal = original;
+  if (!saved || saved.focused) input.focus();
+  if (saved) input.setSelectionRange(saved.start, saved.end, saved.direction);
+  else input.select();
 
   let settled = false;
   const finish = async (commit) => {
-    if (settled) return;
+    if (settled || state.restoringEdit) return;
     settled = true;
     state.editingId = null;
+    state.editOriginal = null;
     const value = input.value.trim();
     if (commit && value && value !== original) {
       await editTask(id, value);
@@ -480,13 +510,20 @@ function rowsOf() {
 
 dom.form.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const value = dom.input.value.trim();
+  if (state.submitting) return;
+  const submittedValue = dom.input.value;
+  const value = submittedValue.trim();
   if (!value) return;
-  const result = await addTask(value);
+  state.submitting = true;
+  let result;
+  try {
+    result = await addTask(value);
+  } finally {
+    state.submitting = false;
+  }
   // 清空输入框的判据是「这条任务已经进列表了」，而不是「一切顺利」：
   // 落盘失败时任务仍在列表上（`applied`），这时留着原文只会让用户再添一条重复的。
-  if (result && (result.ok || result.applied)) dom.input.value = '';
-  dom.input.focus();
+  if (result && (result.ok || result.applied) && dom.input.value === submittedValue) dom.input.value = '';
 });
 
 for (const tab of dom.tabs) {
@@ -629,8 +666,11 @@ dom.undoButton.addEventListener('click', undoLastDelete);
 /* ---------- 启动 ---------- */
 
 async function refreshStatus() {
+  const revision = ++statusRequestRevision;
   try {
     const status = await window.dotodo.getStatus();
+    // 快照更新会并行请求状态；较早的请求可能较晚返回，不能覆盖最新状态。
+    if (revision !== statusRequestRevision) return;
     const warnings = Array.isArray(status?.warnings) ? status.warnings : [];
     dom.warning.hidden = warnings.length === 0;
     dom.warning.textContent = warnings.join(' ');

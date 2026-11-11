@@ -10,13 +10,15 @@ const {
   globalShortcut,
   ipcMain,
   screen,
-  shell: electronShell
+  shell: electronShell,
+  powerMonitor
 } = require('electron');
 const { createState } = require('./domain/state-schema');
 const { createDailyTodoEngine } = require('./domain/daily-todo-engine');
 const { JsonStateStore } = require('./infrastructure/json-state-store');
 const { registerIpc } = require('./electron/ipc');
 const { formatLocalInstant, millisecondsUntilNextMidnight } = require('./electron/local-time');
+const { createDayRolloverScheduler } = require('./electron/day-rollover');
 const { createShellController } = require('./electron/shell-controller');
 const { createWindowController } = require('./electron/window-controller');
 const { createDesktopLayer } = require('./electron/desktop-layer');
@@ -380,39 +382,37 @@ async function handleShellIntent(intent) {
   }
 }
 
-let midnightTimer = null;
+let dayRolloverScheduler = null;
 
-/**
- * 到零点就把「今天」翻过去，并推一次快照。
- *
- * 没有这个定时器会怎样：应用整天开着，界面停在昨天。用户点一下昨天那条任务时，
- * 命令进来前会先归档，那条任务已经不在今天了，于是界面弹一条「任务不存在」——
- * 数据没错（归档是准的），但用户每天被莫名报错一次。有了定时器，零点刚过界面就
- * 已经翻页，那一小段窗口期几乎不存在。
- *
- * 定时器 `unref`：它挂着不该阻止进程退出。每次触发后重新算下一次（夏令时当天
- * 不是整 24 小时，所以不能写死 86400000）。
- */
+function checkCurrentDay() {
+  const beforeSnapshot = engine.getSnapshot();
+  const beforeStatus = getRuntimeStatus();
+  try {
+    const prepared = prepareCurrentDay();
+    if (prepared && prepared.ok === false) console.error('[DoTodo rollover]', prepared.error);
+  } catch (error) {
+    console.error('[DoTodo rollover]', error);
+  } finally {
+    // 只有跨日或运行状态变化才推送，避免后台校时打断正常编辑。
+    const changed = JSON.stringify(beforeSnapshot) !== JSON.stringify(engine.getSnapshot())
+      || JSON.stringify(beforeStatus) !== JSON.stringify(getRuntimeStatus());
+    if (changed) broadcastSnapshot();
+  }
+}
+
 function scheduleMidnightRollover() {
-  if (midnightTimer !== null) clearTimeout(midnightTimer);
-  midnightTimer = setTimeout(() => {
-    midnightTimer = null;
-    try {
-      const prepared = prepareCurrentDay();
-      if (prepared && prepared.ok === false) console.error('[DoTodo rollover]', prepared.error);
-      else broadcastSnapshot();
-    } catch (error) {
-      console.error('[DoTodo rollover]', error);
-    }
-    scheduleMidnightRollover();
-  }, millisecondsUntilNextMidnight());
-  if (typeof midnightTimer.unref === 'function') midnightTimer.unref();
+  if (dayRolloverScheduler) dayRolloverScheduler.stop();
+  dayRolloverScheduler = createDayRolloverScheduler({
+    onCheck: checkCurrentDay,
+    millisecondsUntilNextMidnight,
+    powerMonitor
+  });
+  dayRolloverScheduler.start();
 }
 
 function stopMidnightRollover() {
-  if (midnightTimer === null) return;
-  clearTimeout(midnightTimer);
-  midnightTimer = null;
+  dayRolloverScheduler?.stop();
+  dayRolloverScheduler = null;
 }
 
 function prepareCurrentDay() {

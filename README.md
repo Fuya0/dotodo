@@ -2,7 +2,7 @@
 
 一个常驻桌面的每日待办清单。透明悬浮卡片，深色玻璃质感，数据只存在本机，不需要账号也不用联网。
 
-用 Electron + 原生 JavaScript 写，同时**整套源码就是一套 Electron 课程**。
+使用 Electron + 原生 JavaScript，实现每日清单、历史回顾和本地数据保存。
 
 ## 它是什么
 
@@ -10,7 +10,7 @@
 - **历史不会被改写**。历史任务的文字、完成状态和顺序都冻结，只能删除或「延续到今天」。
 - **延续只发生一次**。一个历史任务终身最多被延续一次，删掉延续出来的新任务也不会重新开放按钮。
 - **后悔药有六秒**。删除后底部弹出撤销条，六秒内可以恢复，超时自动失效。
-- **桌面常驻**。无边框、可拖动缩放、中性灰玻璃（固定透明度，不提供会调坏可读性的滑杆）、不进任务栏、托盘、全局快捷键、开机启动。
+- **桌面常驻**。无边框、可拖动缩放、中性灰玻璃（固定透明度，不提供会调坏可读性的滑杆）、不进任务栏、托盘、全局快捷键、开机启动。Windows 桌面模式固定在主屏吸附，拖到副屏会回到主屏。
 - **数据在本机**。单个 JSON 文件，原子写入 + 备份轮转 + 损坏恢复，可以导出和导入。
 
 ## 想直接用
@@ -91,33 +91,6 @@ npm run dist:win
 | `Alt + ↑/↓` | 调整当前行顺序（等价于拖拽） |
 | `Esc` | 取消编辑、关闭设置面板 |
 
-## 想学 Electron
-
-**从这个文件开始：** `F:\杂\转开发\DoTodo-learning\course\README.md`
-
-那是课程总索引。九课按顺序讲完这个应用从空目录到安装包的全过程：
-
-| 课 | 主题 |
-| --- | --- |
-| 01 | 不依赖 Electron 的纯 JavaScript 领域层 |
-| 02 | Node 文件系统、原子写入与损坏恢复 |
-| 03 | Main / Preload / Renderer 与安全 IPC 边界 |
-| 04 | 透明窗口、深色玻璃与 DOM 投影 |
-| 05 | 状态驱动的交互：历史、撤销、拖拽、设置 |
-| 06 | 托盘、全局快捷键、开机启动 |
-| 07 | 导入导出、数据恢复与验证工作流 |
-| 08 | 仓库整理、构建配置与课程索引 |
-| 09 | 打包、签名与跨平台发布 |
-
-每一课都配了手写习题（`F:\杂\转开发\DoTodo-learning\exercises\`），全部用 `node:test` 自动判分。
-**课程和习题都不在这个仓库里**——它们是本地学习材料，不参与软件的版本管理。
-
-```powershell
-node exercises/04-renderer/starter.test.js   # 在 DoTodo-learning 里运行
-```
-
-习题**不在** `npm test` 范围内，做不做都不影响应用运行。
-
 ## 架构
 
 ```text
@@ -136,7 +109,8 @@ src/
     ipc.js                   固定频道表 + 参数校验 + 持久化
     window-controller.js     BrowserWindow 创建、安全选项、尺寸防抖
     shell-controller.js      托盘、全局快捷键、开机启动
-    local-time.js            带本地时区偏移的时间戳
+    local-time.js            带本地时区偏移的时间戳与本地零点计算
+    day-rollover.js          零点归档、恢复唤醒校时与退出清理
 
   renderer/                  只画界面，不碰 Node
     index.html               语义化结构
@@ -176,7 +150,7 @@ build/                       只用于构建的资源（应用图标 SVG）
 npm start            # 开发运行
 npm test             # 全部测试（200+ 条断言，实际数字跑一次就知道）
 npm run smoke        # 真实 Electron 冒烟测试，使用隔离的临时数据目录
-npm run ui-check     # 在真实渲染进程里重放交互（12 个场景，断言数跑一次就知道），每个场景留一张截图
+npm run ui-check     # 在真实渲染进程里重放交互（13 个场景，断言数跑一次就知道），每个场景留一张截图
 npm run icons        # 重新生成托盘图标
 npm run shot         # 把界面渲染成 PNG：可指定底色、页面、窗口尺寸，还能先跑一段脚本再截
 npm run paths        # 打印应用实际使用的数据目录与状态文件路径
@@ -208,10 +182,10 @@ npm run acceptance   # 准备隔离的验收数据并打印启动命令（不动
 | 平台 | 状态 |
 | --- | --- |
 | Windows | 已实现，自动验证可跑；**人工验收清单见 [`docs/testing/electron-windows-manual-checklist.md`](docs/testing/electron-windows-manual-checklist.md)** |
-| macOS | 代码路径已写好（`CommandOrControl`、登录项、`desktop` 层级的差异说明），但**尚未在 macOS 上构建和验证**。签名、公证和 `dist:mac` 待第 9 课 |
+| macOS | 代码与构建配置已准备，**尚未在 macOS 上构建和验证**；签名、公证与实际运行仍待验证 |
 
 关于 Electron 应用的体积：安装后约 360 MB，其中业务代码只有二十几 KB，其余是 Chromium 与 Node.js 运行时。
-详细的分类实测数字和「想变小该怎么做」写在附录（`DoTodo-learning\course\appendix-desktop-stack-and-packaging.md`）里。
+这主要是 Electron 运行时的成本，应用不包含账号服务、云同步或数据库。
 
 ## License
 

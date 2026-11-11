@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { createHash } = require('node:crypto');
 const { cloneState, validateState } = require('../domain/state-schema');
 
 class JsonStateStore {
@@ -19,9 +20,8 @@ class JsonStateStore {
     });
     this.writable = true;
     this.recoverySequence = 0;
-    // 保留下来的恢复文件路径（累积），以及已经留过证据的源文件。
-    // 后者用来去重：同一个坏文件可能被 load() 和后续的 save() 各发现一次，
-    // 不去重就会留下两份内容完全相同的 recovery 文件——用户会以为是两份不同的证据。
+    // 恢复文件路径累积保留；以源路径和内容摘要去重。
+    // 同一份损坏内容被 load/save 重复发现时只复制一次，后续不同的损坏内容仍须保留。
     this.preservedFiles = [];
     this.preservedSources = new Set();
     this.copyFileSync = copyFileSync;
@@ -87,6 +87,10 @@ class JsonStateStore {
     fs.mkdirSync(this.directory, { recursive: true });
 
     const current = this.#readCandidate(this.paths.primary);
+    if (current.kind === 'corrupt') {
+      this.#preserveCorruptFile(this.paths.primary, 'primary', []);
+      this.#assertWritable();
+    }
     if (current.kind === 'valid') {
       const existingBackup = this.#readCandidate(this.paths.backup);
       if (existingBackup.kind === 'corrupt') {
@@ -157,16 +161,15 @@ class JsonStateStore {
   }
 
   #preserveCorruptFile(sourcePath, label, preservedFiles) {
-    // 同一个源文件只留一次。load() 可能已经留过，随后 save() 轮转备份时又会读到同一份坏文件；
-    // 再复制一份只会让用户看到两个名字不同、内容一样的文件。
-    if (this.preservedSources.has(sourcePath)) return;
-
     const recoveryPath = this.#nextRecoveryPath(label);
     try {
+      const digest = createHash('sha256').update(fs.readFileSync(sourcePath)).digest('hex');
+      const sourceKey = `${sourcePath}\0${digest}`;
+      if (this.preservedSources.has(sourceKey)) return;
       this.copyFileSync(sourcePath, recoveryPath, fs.constants.COPYFILE_EXCL);
       syncFile(recoveryPath);
       this.syncDirectory(this.directory);
-      this.preservedSources.add(sourcePath);
+      this.preservedSources.add(sourceKey);
       this.preservedFiles.push(recoveryPath);
       preservedFiles.push(recoveryPath);
     } catch {

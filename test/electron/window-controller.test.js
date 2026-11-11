@@ -271,6 +271,27 @@ test('没有可用区域信息时不摆位', () => {
   assert.deepEqual(window.bounds, { x: 762, y: 498, width: 380, height: 500 });
 });
 
+test('桌面挂载失败时不按客户区坐标移动普通窗口', () => {
+  const desktopLayer = createFakeDesktopLayer({ attached: false, reason: 'set-parent-refused' }, LAYOUT);
+  const { window } = createHarness({ desktopLayer, workArea: WORK_AREA });
+  const before = window.getBounds();
+  window.onceListeners.get('ready-to-show')();
+  assert.deepEqual(window.getBounds(), before);
+  assert.equal(window.boundsWrites, undefined);
+});
+
+test('桌面窗口吸附后保存原生屏幕矩形，而不是 Electron 的边框偏移值', () => {
+  const desktopLayer = createFakeDesktopLayer(undefined, LAYOUT);
+  const actual = { x: 774, y: 502, width: 380, height: 500 };
+  desktopLayer.windowRect = () => ({ ...actual });
+  const { boundsChanges, scheduled, window } = createHarness({ desktopLayer, workArea: WORK_AREA });
+  window.bounds = { x: 782, y: 502, width: 364, height: 492 };
+  window.onceListeners.get('ready-to-show')();
+  window.listeners.get('move')();
+  scheduled.at(-1)();
+  assert.deepEqual(boundsChanges, [actual]);
+});
+
 test('已经对齐时不再写一次位置，吸附才会收敛', () => {
   const desktopLayer = createFakeDesktopLayer(undefined, LAYOUT);
   const { scheduled, window } = createHarness({ desktopLayer, workArea: WORK_AREA });
