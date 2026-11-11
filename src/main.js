@@ -16,7 +16,7 @@ const { createState } = require('./domain/state-schema');
 const { createDailyTodoEngine } = require('./domain/daily-todo-engine');
 const { JsonStateStore } = require('./infrastructure/json-state-store');
 const { registerIpc } = require('./electron/ipc');
-const { formatLocalInstant } = require('./electron/local-time');
+const { formatLocalInstant, millisecondsUntilNextMidnight } = require('./electron/local-time');
 const { createShellController } = require('./electron/shell-controller');
 const { createWindowController } = require('./electron/window-controller');
 const { createDesktopLayer } = require('./electron/desktop-layer');
@@ -170,18 +170,38 @@ function persistBounds(bounds) {
   }
 }
 
+/**
+ * 首次运行时的初始位置：主屏工作区居中。
+ *
+ * 没有这一步时窗口由 Windows 自己挑位置 —— 双屏且副屏在左侧时，它有几率被摆到副屏上，
+ * 用户第一次启动就找不到自己的清单。保存过位置的老用户不受影响。
+ */
+function initialWindowBounds({ width, height, x, y }) {
+  if (Number.isFinite(x) && Number.isFinite(y)) return { width, height, x, y };
+  const area = screen.getPrimaryDisplay().workArea;
+  return {
+    width,
+    height,
+    x: Math.round(area.x + (area.width - width) / 2),
+    y: Math.round(area.y + (area.height - height) / 2)
+  };
+}
+
 function createAppWindow() {
   const snapshot = engine.getSnapshot();
   windowController = createWindowController({
     BrowserWindow,
     preloadPath: path.join(__dirname, 'preload.js'),
     htmlPath: path.join(__dirname, 'renderer', 'index.html'),
-    bounds: snapshot.windowBounds,
+    bounds: initialWindowBounds(snapshot.windowBounds),
     onBoundsChanged: persistBounds,
     desktopLayer,
-    // 吸附要用**可用区域**而不是整块屏幕：桌面图标的坐标是屏幕坐标，但窗口不该
-    // 落到任务栏底下去。
-    workArea: () => screen.getPrimaryDisplay().workAreaSize,
+    // 吸附只按**主屏**的可用区域算。
+    //
+    // 用「窗口所在那块屏」看起来更聪明，但启动瞬间窗口还没落定，跟着它跑会被副屏
+    // 带偏（实测：新装时窗口被摆到左屏）。固定主屏的结果是可预期的：它永远待在
+    // 你工作的那块屏上。拖到副屏会被拉回来 —— 这是这台机器上目前已知的限制。
+    workArea: () => screen.getPrimaryDisplay().workArea,
     onDesktopAttachment: (outcome) => {
       // 挂不上是正常的降级，不是错误；但「为什么没贴上」必须能从日志回答，
       // 否则这个功能坏掉时是彻底静默的。
@@ -360,6 +380,41 @@ async function handleShellIntent(intent) {
   }
 }
 
+let midnightTimer = null;
+
+/**
+ * 到零点就把「今天」翻过去，并推一次快照。
+ *
+ * 没有这个定时器会怎样：应用整天开着，界面停在昨天。用户点一下昨天那条任务时，
+ * 命令进来前会先归档，那条任务已经不在今天了，于是界面弹一条「任务不存在」——
+ * 数据没错（归档是准的），但用户每天被莫名报错一次。有了定时器，零点刚过界面就
+ * 已经翻页，那一小段窗口期几乎不存在。
+ *
+ * 定时器 `unref`：它挂着不该阻止进程退出。每次触发后重新算下一次（夏令时当天
+ * 不是整 24 小时，所以不能写死 86400000）。
+ */
+function scheduleMidnightRollover() {
+  if (midnightTimer !== null) clearTimeout(midnightTimer);
+  midnightTimer = setTimeout(() => {
+    midnightTimer = null;
+    try {
+      const prepared = prepareCurrentDay();
+      if (prepared && prepared.ok === false) console.error('[DoTodo rollover]', prepared.error);
+      else broadcastSnapshot();
+    } catch (error) {
+      console.error('[DoTodo rollover]', error);
+    }
+    scheduleMidnightRollover();
+  }, millisecondsUntilNextMidnight());
+  if (typeof midnightTimer.unref === 'function') midnightTimer.unref();
+}
+
+function stopMidnightRollover() {
+  if (midnightTimer === null) return;
+  clearTimeout(midnightTimer);
+  midnightTimer = null;
+}
+
 function prepareCurrentDay() {
   const result = engine.ensureCurrentDay(formatLocalInstant());
   if (!result.ok) return result;
@@ -448,6 +503,9 @@ async function initialize() {
     prepareState: prepareCurrentDay
   });
   await windowController.load();
+  // 界面和数据都就位之后才开始守零点：先挂定时器的话，它可能在窗口还没建好时
+  // 触发翻页，虽然不会出错，但会白白推一次没人听的快照。
+  scheduleMidnightRollover();
 }
 
 if (printPaths) {
@@ -490,6 +548,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  stopMidnightRollover();
   ipcRegistration?.dispose();
   shellController?.dispose();
   windowController?.dispose();

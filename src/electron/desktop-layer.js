@@ -9,6 +9,7 @@ const WS_CHILD = 0x40000000;
 
 const SWP_NOSIZE = 0x0001;
 const SWP_NOMOVE = 0x0002;
+const SWP_NOZORDER = 0x0004;
 const SWP_NOACTIVATE = 0x0010;
 const SWP_SHOWWINDOW = 0x0040;
 
@@ -44,11 +45,23 @@ const DESKTOP_LAYER_REASONS = Object.freeze({
  * 壁纸层还是**临时**的：Win+D、主题变化都会让 Explorer 把它重建一次，挂在它下面的
  * 窗口会跟着被销毁。挂到 `Progman` 本身则和图标层同级、且活得和桌面一样久。
  *
- * ## 键盘
+ * ## 坐标系（踩过两次的地方）
  *
- * 挂进去之后窗口的顶层祖先变成了 `Progman`，而键盘只发给"顶层窗口处于激活状态"
- * 的那个窗口 —— 桌面永远不会被激活，所以点它的时候键盘是死的。`focus()` 手动把
- * 桌面顶成前台再把焦点塞回来。桌面图标能收键盘走的就是同一条路。
+ * 窗口挂进桌面后是 WS_CHILD，于是同一个矩形有两种说法：
+ *
+ *   - `GetWindowRect` / Electron 的 `getBounds` → **屏幕**坐标
+ *   - `SetWindowPos` / Electron 的 `setBounds` → **父窗口客户区**坐标
+ *
+ * 桌面从 (0,0) 开始时两者相等，单屏机器上这个差别永远看不出来。副屏放在主屏左边时，
+ * 桌面窗口的屏幕原点是 (-1920, 0)，两种坐标差整整一块屏 —— 拿一套坐标去喂另一套，
+ * 窗口就会被扔到另一块屏、甚至屏幕外。
+ *
+ * 所以这里的约定是：
+ *
+ *   - `iconLayout()` 返回的图标坐标保持 `LVM_GETITEMPOSITION` 原样（= 桌面客户区坐标）
+ *   - `origin()` 给出桌面窗口的屏幕原点
+ *   - 调用方把 `getBounds()`（屏幕）减去 `origin()` 得到客户区坐标后再规划，
+ *     最后把客户区坐标交给 `setBounds`
  *
  * @param {object} [options]
  * @param {object|null} [options.native] Win32 调用表，默认自己加载；测试塞假的进来。
@@ -72,14 +85,15 @@ function createDesktopLayer({ native = loadWin32() } = {}) {
     isAttached: (hwnd) => (usable ? isWindowAttached(native, hwnd) : false),
 
     /**
-     * 桌面图标的网格和占位。
+     * 桌面图标的格子尺寸、网格原点和每个图标的位置，全部是**桌面客户区坐标**。
      *
      * 图标的位置在 Explorer 进程的内存里，要跨进程读 —— 哪一步读不到都返回 null，
      * 调用方据此什么都不做。桌面层的任何一步失败都不该影响窗口正常显示。
-     *
-     * @returns {{cell:{width,height}, origin:{x,y}, positions:Array}|null}
      */
-    iconLayout: () => (usable ? readIconLayout(native) : null)
+    iconLayout: () => (usable ? readIconLayout(native) : null),
+
+    /** 桌面窗口在屏幕上的原点；配合 `getBounds` 换算出客户区坐标。 */
+    origin: () => (usable ? desktopOrigin(native) : null)
   });
 }
 
@@ -96,6 +110,10 @@ function attachWindow(native, hwnd) {
 
   // 不带上 WS_CHILD 的话，桌面不会把它当成自己的子窗口来绘制。
   const style = native.getStyle(hwnd);
+  // 挂之前先记住屏幕位置：加上 WS_CHILD 并 SetParent 之后，Windows 会把窗口现有的
+  // 坐标**当成父窗口客户区坐标**重新解释，于是整体平移一个桌面原点的距离。
+  const beforeAttach = native.getWindowRect(hwnd);
+
   native.setStyle(hwnd, (style & ~WS_POPUP) | WS_CHILD);
   native.setParent(hwnd, host);
 
@@ -104,6 +122,17 @@ function attachWindow(native, hwnd) {
     // 也不再算普通窗口 —— 比不挂还糟。
     native.setStyle(hwnd, style);
     return refused(DESKTOP_LAYER_REASONS.parentRefused);
+  }
+
+  // 挪回原来的屏幕位置：屏幕坐标减桌面原点 = 客户区坐标。
+  const hostRect = native.getWindowRect(host);
+  if (beforeAttach && hostRect) {
+    native.setWindowPos(
+      hwnd, null,
+      beforeAttach.x - hostRect.x, beforeAttach.y - hostRect.y,
+      beforeAttach.width, beforeAttach.height,
+      SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW
+    );
   }
 
   // `null` 就是 HWND_TOP：和图标层同级，但画在图标上面。
@@ -130,7 +159,7 @@ function isWindowAttached(native, hwnd) {
 }
 
 /**
- * 读出桌面图标的格子尺寸、网格原点和每个图标的位置。
+ * 读出桌面图标的格子尺寸、网格原点和每个图标的位置（桌面客户区坐标）。
  *
  * 链路是 Explorer 自己的窗口树：`Progman -> SHELLDLL_DefView -> SysListView32`。
  * 任何一环缺失都返回 null —— 拿不到就不摆，而不是猜一个位置。
@@ -156,6 +185,15 @@ function readIconLayout(native) {
   if (!positions) return null;
 
   return { cell, origin: gridOrigin(positions, cell), positions };
+}
+
+/** 桌面窗口在屏幕上的原点。 */
+function desktopOrigin(native) {
+  if (typeof native.getWindowRect !== 'function') return null;
+  const host = native.findWindow(DESKTOP_HOST_CLASS, null);
+  if (!host) return null;
+  const rect = native.getWindowRect(host);
+  return rect ? { x: rect.x, y: rect.y } : null;
 }
 
 function refused(reason) {

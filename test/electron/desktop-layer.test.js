@@ -58,6 +58,13 @@ function createFakeNative(overrides = {}) {
       this.calls.push(['setWindowPos', handle, insertAfter, x, y, width, height, flags]);
       return true;
     },
+    getWindowRect(handle) {
+      this.calls.push(['getWindowRect', handle]);
+      // 桌面的屏幕原点故意放在 (-1920, 0)：单屏 (0,0) 时这个差异是 0，测不出来。
+      return handle === PROGMAN
+        ? { x: -1920, y: 0, width: 3840, height: 1080 }
+        : { x: 100, y: 50, width: 380, height: 500 };
+    },
     setForegroundWindow(handle) {
       this.calls.push(['setForegroundWindow', handle]);
       if (overrides.foregroundRefused === true) return false;
@@ -98,10 +105,11 @@ test('挂载后把窗口摆到 Progman 子窗口的最上面，也就是图标�
   const native = createFakeNative();
   createDesktopLayer({ native }).attach(WINDOW);
 
-  const [position] = calledWith(native, 'setWindowPos');
-  assert.equal(position[2], null, 'HWND_TOP 用 null 表示');
+  const positions = calledWith(native, 'setWindowPos');
+  const last = positions.at(-1);
+  assert.equal(last[2], null, 'HWND_TOP 用 null 表示');
   // NOMOVE | NOSIZE | NOACTIVATE | SHOWWINDOW：不动位置尺寸，也不抢焦点。
-  assert.equal(position.at(-1), 0x0002 | 0x0001 | 0x0010 | 0x0040);
+  assert.equal(last.at(-1), 0x0002 | 0x0001 | 0x0010 | 0x0040);
 });
 
 test('找不到桌面宿主时，窗口一根手指都不碰', () => {

@@ -64,7 +64,8 @@ function createFakeDesktopLayer(outcome = { attached: true, reason: 'attached' }
     hwndOf(window) { calls.push(['hwndOf', window]); return WINDOW_HANDLE; },
     attach(handle) { calls.push(['attach', handle]); return outcome; },
     focus(handle) { calls.push(['focus', handle]); return true; },
-    iconLayout() { calls.push(['iconLayout']); return layout; }
+    iconLayout() { calls.push(['iconLayout']); return layout; },
+    origin() { calls.push(['origin']); return { x: 0, y: 0 }; }
   };
 }
 
@@ -236,7 +237,7 @@ const LAYOUT = Object.freeze({
   origin: { x: 14, y: 2 },
   positions: [{ x: 14, y: 2 }]
 });
-const WORK_AREA = () => ({ width: 1920, height: 1032 });
+const WORK_AREA = () => ({ x: 0, y: 0, width: 1920, height: 1032 });
 
 test('第一次显示之前就把窗口摆到图标网格上', () => {
   const desktopLayer = createFakeDesktopLayer(undefined, LAYOUT);

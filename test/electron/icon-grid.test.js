@@ -6,7 +6,7 @@ const { gridOrigin, occupiedCells, planBounds, snapToCell } = require('../../src
 /** 这台机器上真实读到的几何：格子 76x100，原点 (14,2)，图标铺满上面 5 行。 */
 const CELL = { width: 76, height: 100 };
 const ORIGIN = { x: 14, y: 2 };
-const SCREEN = { width: 1920, height: 1032 }; // 已排除任务栏
+const SCREEN = { x: 0, y: 0, width: 1920, height: 1032 }; // 已排除任务栏
 
 function fillRows(rows, columns = 25) {
   const positions = [];
@@ -100,8 +100,22 @@ test('窗口跑到屏幕外时会被拉回可用区域', () => {
   assert.ok(planned.y >= 0 && planned.y + planned.height <= SCREEN.height, `y 越界：${planned.y}`);
 });
 
-test('返回的矩形永远落在网格线上', () => {
-  const positions = fillRows(5);
+test('副屏在主屏左侧时，吸附落在负坐标那块屏上，不会被拉回主屏', () => {
+  // 真实场景：主屏 (0,0) 1920x1080，副屏放在它左边，坐标从 -1920 开始。
+  // 旧实现按主屏的 {width,height} 夹位置，会把窗口强行拉回正坐标。
+  const secondary = { x: -1920, y: 0, width: 1920, height: 1032 };
+  const planned = planBounds({
+    bounds: { x: -1800, y: 400, width: 380, height: 500 },
+    cell: CELL, origin: ORIGIN, positions: [], screen: secondary
+  });
+
+  assert.ok(planned, '副屏上应该有位置');
+  assert.ok(planned.x >= -1920, `左边越界：${planned.x}`);
+  assert.ok(planned.x + planned.width <= 0, `右边越界（跑到主屏上了）：${planned.x + planned.width}`);
+  assert.equal(((planned.x - ORIGIN.x) % CELL.width + CELL.width) % CELL.width, 0, '仍然对齐网格');
+});
+
+test('返回的矩形永远落在网格线上', () => {  const positions = fillRows(5);
   for (const bounds of [
     { x: 0, y: 0, width: 390, height: 610 },
     { x: 333, y: 777, width: 500, height: 450 },

@@ -72,23 +72,43 @@ function createWindowController({
     if (!desktopLayer || window.isDestroyed()) return;
     const layout = desktopLayer.iconLayout();
     const area = workArea();
-    if (!layout || !area) return;
+    const origin = desktopLayer.origin ? desktopLayer.origin() : null;
+    if (!layout || !area || !origin) return;
+
+    // 坐标系：图标位置是**桌面客户区**坐标，而 getBounds 给的是**屏幕**坐标。
+    // 把窗口位置和可用区域都减去桌面原点，统一到客户区坐标系再规划、再写回。
+    // 直接混用两套坐标时，副屏放在主屏左边的机器上窗口会被扔到屏幕外。
+    const bounds = window.getBounds();
+    const clientBounds = {
+      x: bounds.x - origin.x,
+      y: bounds.y - origin.y,
+      width: bounds.width,
+      height: bounds.height
+    };
+    const clientArea = {
+      x: area.x - origin.x,
+      y: area.y - origin.y,
+      width: area.width,
+      height: area.height
+    };
 
     const target = planBounds({
-      bounds: window.getBounds(),
+      bounds: clientBounds,
       cell: layout.cell,
       origin: layout.origin,
       positions: layout.positions,
-      screen: area
+      screen: clientArea
     });
     if (!target) return;
 
-    const current = window.getBounds();
-    // 相等就停。`setBounds` 会再发一次 move/resize，靠这一句让来回吸附收敛。
-    if (current.x === target.x && current.y === target.y &&
-        current.width === target.width && current.height === target.height) {
+    // 相等就停。setBounds 会再发一次 move/resize，靠这一句让来回吸附收敛。
+    if (clientBounds.x === target.x && clientBounds.y === target.y &&
+        clientBounds.width === target.width && clientBounds.height === target.height) {
       return;
     }
+
+    // 交给 Electron 写：它和 Chromium 的窗口缓存是一套的，我们在外面直接 SetWindowPos
+    // 会被它按缓存拽回去。它按父窗口客户区坐标写，正好就是这里算出来的坐标系。
     window.setBounds(target);
   }
 

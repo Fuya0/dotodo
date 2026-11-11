@@ -108,14 +108,22 @@ function planBounds({ bounds, cell, origin, positions, screen, minimumRows = 3 }
   return null;
 }
 
-/** 最近的空格子。按行优先扫描，同距离取更靠上、更靠左的，结果是确定的。 */
+/**
+ * 最近的空格子。按行优先扫描，同距离取更靠上、更靠左的，结果是确定的。
+ *
+ * `screen` 是一块屏的可用区域 `{ x, y, width, height }`，坐标是屏幕坐标。
+ * 网格原点可能不在 (0,0)，屏也可能在负坐标上（副屏放在主屏左边时就是这样），
+ * 所以先把它换算成格子编号，再按格子扫。
+ */
 function nearestFreeSlot({ columns, rows, wantedColumn, wantedRow, taken, cell, origin, screen }) {
-  const lastColumn = Math.floor((screen.width - origin.x) / cell.width) - columns;
-  const lastRow = Math.floor((screen.height - origin.y) / cell.height) - rows;
-  if (lastColumn < 0 || lastRow < 0) return null;
+  const firstColumn = Math.ceil((screen.x - origin.x) / cell.width);
+  const firstRow = Math.ceil((screen.y - origin.y) / cell.height);
+  const lastColumn = Math.floor((screen.x + screen.width - origin.x) / cell.width) - columns;
+  const lastRow = Math.floor((screen.y + screen.height - origin.y) / cell.height) - rows;
+  if (lastColumn < firstColumn || lastRow < firstRow) return null;
 
   function isFree(column, row) {
-    if (column < 0 || row < 0 || column > lastColumn || row > lastRow) return false;
+    if (column < firstColumn || row < firstRow || column > lastColumn || row > lastRow) return false;
     for (let r = 0; r < rows; r += 1) {
       for (let c = 0; c < columns; c += 1) {
         if (taken.has(`${column + c},${row + r}`)) return false;
@@ -126,8 +134,8 @@ function nearestFreeSlot({ columns, rows, wantedColumn, wantedRow, taken, cell, 
 
   let best = null;
   let bestDistance = Infinity;
-  for (let row = 0; row <= lastRow; row += 1) {
-    for (let column = 0; column <= lastColumn; column += 1) {
+  for (let row = firstRow; row <= lastRow; row += 1) {
+    for (let column = firstColumn; column <= lastColumn; column += 1) {
       if (!isFree(column, row)) continue;
       const distance = Math.abs(column - wantedColumn) + Math.abs(row - wantedRow);
       if (distance < bestDistance) {

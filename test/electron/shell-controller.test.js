@@ -228,8 +228,8 @@ test('托盘菜单的条目与勾选状态来自当前设置', () => {
 
   const labels = harness.menus.at(-1).filter((item) => item.label).map((item) => item.label);
   assert.deepEqual(labels, [
-    '显示 DoTodo',
-    '隐藏 DoTodo',
+    '显示在桌面',
+    '从桌面隐藏',
     '关闭时隐藏到托盘',
     '开机启动',
     '退出 DoTodo'
@@ -255,10 +255,10 @@ test('托盘菜单的显示与隐藏直接作用在窗口上', () => {
   const harness = createHarness();
   harness.controller.initialize();
 
-  menuItem(harness, '隐藏 DoTodo').click();
+  menuItem(harness, '从桌面隐藏').click();
   assert.equal(harness.window.visible, false);
 
-  menuItem(harness, '显示 DoTodo').click();
+  menuItem(harness, '显示在桌面').click();
   assert.equal(harness.window.visible, true);
   assert.equal(harness.intents.length, 0);
 });

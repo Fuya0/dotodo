@@ -84,8 +84,8 @@ function createShellController(options) {
     if (!tray || typeof Menu?.buildFromTemplate !== 'function') return false;
     const settings = getSettings() ?? {};
     tray.setContextMenu(Menu.buildFromTemplate([
-      { label: '显示 DoTodo', click: showWindow },
-      { label: '隐藏 DoTodo', click: hideWindow },
+      { label: '显示在桌面', click: showWindow },
+      { label: '从桌面隐藏', click: hideWindow },
       { type: 'separator' },
       {
         label: '关闭时隐藏到托盘',
