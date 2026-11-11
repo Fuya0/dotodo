@@ -2,8 +2,8 @@
 node_modules/
 
 # 构建产物
-release/
-dist/
+/release/
+/dist/
 
 # 截图工具的临时输出
 shots/

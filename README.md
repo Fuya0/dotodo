@@ -91,6 +91,10 @@ npm run dist:win
 | `Alt + ↑/↓` | 调整当前行顺序（等价于拖拽） |
 | `Esc` | 取消编辑、关闭设置面板 |
 
+## Electron 学习习题
+
+仓库中的 [`exercises/`](exercises/) 是独立的空白练习集：每组提供题目、`starter.js` 模板和 `node:test` 判分文件。习题不参与 `npm test`，个人答案请保存在本机其他目录，不要提交。
+
 ## 架构
 
 ```text
