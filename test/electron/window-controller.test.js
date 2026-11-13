@@ -1,4 +1,4 @@
-const test = require('node:test');
+﻿const test = require('node:test');
 const assert = require('node:assert/strict');
 
 let windowModule = {};
@@ -57,15 +57,16 @@ class FakeBrowserWindow {
   setBounds(next) { this.bounds = { ...next }; this.boundsWrites = (this.boundsWrites ?? 0) + 1; }
 }
 
-function createFakeDesktopLayer(outcome = { attached: true, reason: 'attached' }, layout = null) {
+function createFakeDesktopLayer(outcome = { attached: true, reason: 'attached' }) {
   const calls = [];
   return {
     calls,
     hwndOf(window) { calls.push(['hwndOf', window]); return WINDOW_HANDLE; },
     attach(handle) { calls.push(['attach', handle]); return outcome; },
     focus(handle) { calls.push(['focus', handle]); return true; },
-    iconLayout() { calls.push(['iconLayout']); return layout; },
-    origin() { calls.push(['origin']); return { x: 0, y: 0 }; }
+    origin() { return { x: 0, y: 0 }; },
+    windowRect() { return null; },
+    moveWindow(handle, rect) { calls.push(['moveWindow', rect]); return true; }
   };
 }
 
@@ -78,11 +79,10 @@ function createHarness(options = {}) {
     BrowserWindow: FakeBrowserWindow,
     preloadPath: 'C:\\app\\preload.js',
     htmlPath: 'C:\\app\\renderer\\index.html',
-    bounds: { x: 10, y: 20, width: 410, height: 620 },
+    bounds: options.bounds ?? { x: 10, y: 20, width: 410, height: 620 },
     onBoundsChanged: (bounds) => boundsChanges.push(bounds),
     onError: (error) => errors.push(error),
     desktopLayer: options.desktopLayer ?? null,
-    workArea: options.workArea ?? (() => null),
     schedule: (callback) => (scheduled.push(callback), scheduled.length),
     cancelSchedule: () => {}
   });
@@ -239,67 +239,77 @@ const LAYOUT = Object.freeze({
 });
 const WORK_AREA = () => ({ x: 0, y: 0, width: 1920, height: 1032 });
 
-test('第一次显示之前就把窗口摆到图标网格上', () => {
-  const desktopLayer = createFakeDesktopLayer(undefined, LAYOUT);
-  const { window } = createHarness({ desktopLayer, workArea: WORK_AREA });
-  window.bounds = { x: 762, y: 498, width: 380, height: 500 };
-
+test('桌面组件保留用户指定的位置而不吸附图标网格', () => {
+  const desktopLayer = createFakeDesktopLayer();
+  const { window, scheduled, boundsChanges } = createHarness({ desktopLayer });
+  const chosen = { x: 762, y: 498, width: 380, height: 500 };
+  window.bounds = { ...chosen };
   window.onceListeners.get('ready-to-show')();
-
-  // x=762 → 第 10 列（774）；y=498 → 第 5 行（502）。
-  assert.deepEqual(window.bounds, { x: 774, y: 502, width: 380, height: 500 });
+  window.listeners.get('move')();
+  scheduled.at(-1)();
+  assert.deepEqual(window.getBounds(), chosen);
+  assert.deepEqual(boundsChanges, [chosen]);
 });
 
-test('读不到图标布局时窗口待在原地，不做任何事', () => {
-  const desktopLayer = createFakeDesktopLayer(); // iconLayout 返回 null
-  const { window } = createHarness({ desktopLayer, workArea: WORK_AREA });
-  window.bounds = { x: 762, y: 498, width: 380, height: 500 };
-
-  window.onceListeners.get('ready-to-show')();
-
-  assert.deepEqual(window.bounds, { x: 762, y: 498, width: 380, height: 500 });
-  assert.equal(window.boundsWrites, undefined);
-});
-
-test('没有可用区域信息时不摆位', () => {
-  const desktopLayer = createFakeDesktopLayer(undefined, LAYOUT);
-  const { window } = createHarness({ desktopLayer }); // workArea 默认返回 null
-  window.bounds = { x: 762, y: 498, width: 380, height: 500 };
-
-  window.onceListeners.get('ready-to-show')();
-
-  assert.deepEqual(window.bounds, { x: 762, y: 498, width: 380, height: 500 });
-});
-
-test('桌面挂载失败时不按客户区坐标移动普通窗口', () => {
-  const desktopLayer = createFakeDesktopLayer({ attached: false, reason: 'set-parent-refused' }, LAYOUT);
-  const { window } = createHarness({ desktopLayer, workArea: WORK_AREA });
-  const before = window.getBounds();
-  window.onceListeners.get('ready-to-show')();
-  assert.deepEqual(window.getBounds(), before);
-  assert.equal(window.boundsWrites, undefined);
-});
-
-test('桌面窗口吸附后保存原生屏幕矩形，而不是 Electron 的边框偏移值', () => {
-  const desktopLayer = createFakeDesktopLayer(undefined, LAYOUT);
+test('桌面窗口保存原生屏幕矩形，而不是 Electron 的边框偏移值', () => {
+  const desktopLayer = createFakeDesktopLayer();
   const actual = { x: 774, y: 502, width: 380, height: 500 };
   desktopLayer.windowRect = () => ({ ...actual });
-  const { boundsChanges, scheduled, window } = createHarness({ desktopLayer, workArea: WORK_AREA });
+  const { boundsChanges, scheduled, window } = createHarness({ desktopLayer });
   window.bounds = { x: 782, y: 502, width: 364, height: 492 };
   window.onceListeners.get('ready-to-show')();
   window.listeners.get('move')();
   scheduled.at(-1)();
   assert.deepEqual(boundsChanges, [actual]);
 });
+test('第一次显示就补上焦点，不需要用户从托盘再点一次', () => {
+  const desktopLayer = createFakeDesktopLayer();
+  const { window } = createHarness({ desktopLayer });
+  window.onceListeners.get('ready-to-show')();
+  assert.equal(window.visible, true);
+  assert.equal(desktopLayer.calls.some(([name]) => name === 'focus'), true);
+});
 
-test('已经对齐时不再写一次位置，吸附才会收敛', () => {
-  const desktopLayer = createFakeDesktopLayer(undefined, LAYOUT);
-  const { scheduled, window } = createHarness({ desktopLayer, workArea: WORK_AREA });
-  window.bounds = { x: 774, y: 502, width: 380, height: 500 };
+test('没有桌面层时第一次显示也会激活普通窗口', () => {
+  const { window } = createHarness();
+  window.onceListeners.get('ready-to-show')();
+  assert.equal(window.focused, true);
+});
 
-  window.listeners.get('move')();
-  scheduled.at(-1)();
+test('桌面挂载失败时第一次显示退回普通窗口焦点', () => {
+  const desktopLayer = createFakeDesktopLayer({ attached: false, reason: 'parent-refused' });
+  const { window } = createHarness({ desktopLayer });
+  window.onceListeners.get('ready-to-show')();
+  assert.equal(window.focused, true);
+});
+test('挂载后按桌面原点把窗口摆回指定的屏幕位置', () => {
+  const desktopLayer = createFakeDesktopLayer();
+  const moves = [];
+  desktopLayer.origin = () => ({ x: -1920, y: 0 });
+  desktopLayer.windowRect = () => ({ x: -1155, y: 211, width: 390, height: 610 });
+  desktopLayer.moveWindow = (handle, rect) => { moves.push(rect); return true; };
+  const { window } = createHarness({
+    desktopLayer,
+    bounds: { x: 765, y: 211, width: 390, height: 610 }
+  });
 
-  // setBounds 会再发一次 move；如果这里还写一次，就会来回弹个不停。
-  assert.equal(window.boundsWrites, undefined);
+  window.onceListeners.get('ready-to-show')();
+
+  assert.deepEqual(moves, [{ x: 2685, y: 211, width: 390, height: 610 }]);
+});
+
+test('位置已经正确时不做多余的移动', () => {
+  const desktopLayer = createFakeDesktopLayer();
+  const moves = [];
+  desktopLayer.origin = () => ({ x: -1920, y: 0 });
+  desktopLayer.windowRect = () => ({ x: 765, y: 211, width: 390, height: 610 });
+  desktopLayer.moveWindow = (handle, rect) => { moves.push(rect); return true; };
+  const { window } = createHarness({
+    desktopLayer,
+    bounds: { x: 765, y: 211, width: 390, height: 610 }
+  });
+
+  window.onceListeners.get('ready-to-show')();
+
+  assert.deepEqual(moves, []);
 });

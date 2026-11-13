@@ -1,5 +1,3 @@
-const { planBounds } = require('./icon-grid');
-
 function createWindowController({
   BrowserWindow,
   preloadPath,
@@ -8,7 +6,6 @@ function createWindowController({
   onBoundsChanged,
   desktopLayer = null,
   onDesktopAttachment = () => {},
-  workArea = () => null,
   onError = () => {},
   schedule = setTimeout,
   cancelSchedule = clearTimeout
@@ -49,6 +46,9 @@ function createWindowController({
   let boundsTimer = null;
   let boundsRevision = 0;
   let desktopAttachment = null;
+  // 用户指定（或上次离开时）的屏幕位置。挂进桌面后 Windows 会把窗口坐标当成
+  // 父窗口客户区坐标解释，整体平移一个桌面原点，所以显示之后要按这份目标摆回去。
+  let desiredScreenBounds = { ...bounds };
 
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
@@ -57,68 +57,52 @@ function createWindowController({
     // 挂到桌面上要在**第一次显示之前**。先以普通窗口的样子闪一下再贴过去，
     // 那一下跳变比什么都显眼；`ready-to-show` 正好是"画好了但还没显示"。
     attachToDesktop();
-    // 摆位也要在显示之前，否则用户会看到它先落在旧位置再跳一下。
-    applyDesktopGrid();
     window.show();
+    // 挂载会把坐标平移一个桌面原点（副屏在主屏左侧时是 -1920），这里摆回来。
+    restoreDesiredPosition();
+    // 只 show 不够：挂进桌面后顶层祖先是桌面，桌面不会被激活，鼠标点击不会
+    // 自动把输入焦点带过来。托盘「显示在桌面」一直有这一步，所以从托盘点开
+    // 就能交互，而冷启动看起来"能看见但点不动"。两条路径必须一致。
+    activateForInteraction();
   });
 
   /**
-   * 把窗口摆到桌面图标的网格上，并且不压住任何图标。
+   * 把窗口摆回目标屏幕位置。
    *
-   * 读不到图标布局（不是 Windows、Explorer 不给读、桌面层没挂上）就什么都不做 ——
-   * 这条路径上的任何失败都只该表现为"窗口待在原地"，不该有别的后果。
+   * 坐标系：`desiredScreenBounds` 是屏幕坐标，原生 `moveWindow` 收的是桌面客户区
+   * 坐标，所以先减桌面原点。位置本来就对时不动，避免启动时多余地挪一下。
    */
-  function applyDesktopGrid() {
-    if (!desktopLayer || !desktopAttachment?.attached || window.isDestroyed()) return;
-    const layout = desktopLayer.iconLayout();
-    const area = workArea();
-    if (!layout || !area) return;
-
-    // 坐标系：图标位置是**桌面客户区**坐标，窗口矩形从原生拿的是**屏幕**坐标。
-    // 减去桌面原点，两边统一到客户区坐标系再规划、再写回。
-    //
-    // 为什么不用 getBounds / setBounds：挂进桌面之后 getBounds 每边少 8px，
-    // setBounds 干脆是空操作（实测）。原生的 windowRect / moveWindow 两个方向都准。
+  function restoreDesiredPosition() {
+    if (!desktopAttachment?.attached || !desktopLayer) return false;
     const hwnd = desktopLayer.hwndOf(window);
-    const screenRect = (hwnd && desktopLayer.windowRect ? desktopLayer.windowRect(hwnd) : null) ||
-      window.getBounds();
-    const origin = desktopLayer.origin ? desktopLayer.origin() : null;
-    if (!origin) return;
+    if (!hwnd) return false;
+    const origin = typeof desktopLayer.origin === 'function' ? desktopLayer.origin() : null;
+    if (!origin) return false;
 
-    const clientBounds = {
-      x: screenRect.x - origin.x,
-      y: screenRect.y - origin.y,
-      width: screenRect.width,
-      height: screenRect.height
-    };
-    const clientArea = {
-      x: area.x - origin.x,
-      y: area.y - origin.y,
-      width: area.width,
-      height: area.height
-    };
-
-    const target = planBounds({
-      bounds: clientBounds,
-      cell: layout.cell,
-      origin: layout.origin,
-      positions: layout.positions,
-      screen: clientArea
-    });
-    if (!target) return;
-
-    // 相等就停。摆一次会再触发一次 move，靠这一句让来回吸附收敛。
-    if (clientBounds.x === target.x && clientBounds.y === target.y &&
-        clientBounds.width === target.width && clientBounds.height === target.height) {
-      return;
+    const current = typeof desktopLayer.windowRect === 'function'
+      ? desktopLayer.windowRect(hwnd)
+      : null;
+    if (current &&
+        current.x === desiredScreenBounds.x && current.y === desiredScreenBounds.y &&
+        current.width === desiredScreenBounds.width &&
+        current.height === desiredScreenBounds.height) {
+      return false;
     }
+    if (typeof desktopLayer.moveWindow !== 'function') return false;
+    return desktopLayer.moveWindow(hwnd, {
+      x: desiredScreenBounds.x - origin.x,
+      y: desiredScreenBounds.y - origin.y,
+      width: desiredScreenBounds.width,
+      height: desiredScreenBounds.height
+    });
+  }
 
-    // 用原生写：挂进桌面之后 Electron 的 setBounds 是空操作（实测），只有原生有效。
-    // 原生 SetWindowPos 对子窗口按父窗口客户区坐标解释，正好就是这里的坐标系。
-    const moved = hwnd && typeof desktopLayer.moveWindow === 'function'
-      ? desktopLayer.moveWindow(hwnd, target)
-      : false;
-    if (!moved) window.setBounds(target);
+  /** 让窗口真正接收输入：桌面层优先补桌面焦点，否则退回普通窗口焦点。 */
+  function activateForInteraction() {
+    const hwnd = desktopAttachment?.attached && desktopLayer ? desktopLayer.hwndOf(window) : null;
+    if (hwnd && typeof desktopLayer.focus === 'function' && desktopLayer.focus(hwnd)) return true;
+    window.focus();
+    return true;
   }
 
   /**
@@ -145,12 +129,12 @@ function createWindowController({
       if (revision !== boundsRevision || window.isDestroyed()) return;
       boundsTimer = null;
       try {
-        // 拖完/缩完之后先吸附回网格，再记位置 —— 记下来的就是最终那一份。
-        applyDesktopGrid();
         const hwnd = desktopAttachment?.attached ? desktopLayer.hwndOf(window) : null;
         const actual = hwnd && typeof desktopLayer.windowRect === 'function'
           ? desktopLayer.windowRect(hwnd)
           : null;
+        // 记下用户拖到的新位置，下次启动按它摆回去。
+        if (actual) desiredScreenBounds = { ...actual };
         onBoundsChanged(actual || window.getBounds());
       } catch (error) {
         onError(error);
@@ -185,7 +169,8 @@ function createWindowController({
       if (window.isDestroyed()) return;
       if (window.isMinimized()) window.restore();
       window.show();
-      window.focus();
+      restoreDesiredPosition();
+      activateForInteraction();
     },
     hide() {
       if (!window.isDestroyed()) window.hide();
