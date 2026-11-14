@@ -22,6 +22,7 @@ const { createDayRolloverScheduler } = require('./electron/day-rollover');
 const { createShellController } = require('./electron/shell-controller');
 const { createWindowController } = require('./electron/window-controller');
 const { createDesktopLayer } = require('./electron/desktop-layer');
+const { normalizeWindowBounds } = require('./electron/window-bounds');
 
 /** 主进程主动推快照用的频道。它不走 invoke/handle，所以不在 ipc.js 的 CHANNELS 表里。 */
 const SNAPSHOT_CHANNEL = 'state:changed';
@@ -173,20 +174,20 @@ function persistBounds(bounds) {
 }
 
 /**
- * 首次运行时的初始位置：主屏工作区居中。
+ * 初始位置：保存的位置必须能在屏幕上找到，否则回到主屏居中。
  *
- * 没有这一步时窗口由 Windows 自己挑位置 —— 双屏且副屏在左侧时，它有几率被摆到副屏上，
- * 用户第一次启动就找不到自己的清单。保存过位置的老用户不受影响。
+ * 这一步是硬性兜底。坐标写错一次、显示器拔掉或分辨率变化，窗口就会被摆到屏幕外——
+ * 进程和托盘都在，但用户什么都看不到。实测过一次：保存值变成 x=-19104，应用
+ * 启动后完全找不到。任何情况下都不该把窗口放到屏幕上不存在的位置。
  */
-function initialWindowBounds({ width, height, x, y }) {
-  if (Number.isFinite(x) && Number.isFinite(y)) return { width, height, x, y };
-  const area = screen.getPrimaryDisplay().workArea;
-  return {
-    width,
-    height,
-    x: Math.round(area.x + (area.width - width) / 2),
-    y: Math.round(area.y + (area.height - height) / 2)
-  };
+function displayWorkAreas() {
+  const primary = screen.getPrimaryDisplay();
+  const others = screen.getAllDisplays().filter((item) => item.id !== primary.id);
+  return [primary, ...others].map((item) => ({ workArea: item.workArea }));
+}
+
+function initialWindowBounds(bounds) {
+  return normalizeWindowBounds(bounds || {}, displayWorkAreas());
 }
 
 function createAppWindow() {
@@ -198,6 +199,8 @@ function createAppWindow() {
     bounds: initialWindowBounds(snapshot.windowBounds),
     onBoundsChanged: persistBounds,
     desktopLayer,
+    // 拖动和缩放之后保存的位置也要过一遍可见性检查；屏幕外的坐标永远不落盘。
+    sanitizeBounds: (rect) => normalizeWindowBounds(rect, displayWorkAreas()),
     onDesktopAttachment: (outcome) => {
       // 挂不上是正常的降级，不是错误；但「为什么没贴上」必须能从日志回答，
       // 否则这个功能坏掉时是彻底静默的。

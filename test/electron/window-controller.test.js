@@ -1,4 +1,4 @@
-﻿const test = require('node:test');
+const test = require('node:test');
 const assert = require('node:assert/strict');
 
 let windowModule = {};
@@ -83,6 +83,7 @@ function createHarness(options = {}) {
     onBoundsChanged: (bounds) => boundsChanges.push(bounds),
     onError: (error) => errors.push(error),
     desktopLayer: options.desktopLayer ?? null,
+    sanitizeBounds: options.sanitizeBounds ?? ((rect) => rect),
     schedule: (callback) => (scheduled.push(callback), scheduled.length),
     cancelSchedule: () => {}
   });
@@ -312,4 +313,16 @@ test('位置已经正确时不做多余的移动', () => {
   window.onceListeners.get('ready-to-show')();
 
   assert.deepEqual(moves, []);
+});
+test('屏幕外的位置在保存前被修正，不会落盘成看不见的坐标', () => {
+  const desktopLayer = createFakeDesktopLayer();
+  desktopLayer.windowRect = () => ({ x: -19104, y: 257, width: 380, height: 595 });
+  const { scheduled, window, boundsChanges } = createHarness({
+    desktopLayer,
+    sanitizeBounds: (rect) => ({ ...rect, x: 765, y: 211 })
+  });
+  window.onceListeners.get('ready-to-show')();
+  window.listeners.get('move')();
+  scheduled.at(-1)();
+  assert.deepEqual(boundsChanges, [{ x: 765, y: 211, width: 380, height: 595 }]);
 });

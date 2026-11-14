@@ -6,6 +6,7 @@ function createWindowController({
   onBoundsChanged,
   desktopLayer = null,
   onDesktopAttachment = () => {},
+  sanitizeBounds = (rect) => rect,
   onError = () => {},
   schedule = setTimeout,
   cancelSchedule = clearTimeout
@@ -48,7 +49,7 @@ function createWindowController({
   let desktopAttachment = null;
   // 用户指定（或上次离开时）的屏幕位置。挂进桌面后 Windows 会把窗口坐标当成
   // 父窗口客户区坐标解释，整体平移一个桌面原点，所以显示之后要按这份目标摆回去。
-  let desiredScreenBounds = { ...bounds };
+  let desiredScreenBounds = sanitizeBounds({ ...bounds });
 
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
@@ -82,18 +83,19 @@ function createWindowController({
     const current = typeof desktopLayer.windowRect === 'function'
       ? desktopLayer.windowRect(hwnd)
       : null;
+    // 兜底：显示器的位置可能已经变了，恢复目标也要重新过一遍可见性检查。
+    const target = sanitizeBounds(desiredScreenBounds);
     if (current &&
-        current.x === desiredScreenBounds.x && current.y === desiredScreenBounds.y &&
-        current.width === desiredScreenBounds.width &&
-        current.height === desiredScreenBounds.height) {
+        current.x === target.x && current.y === target.y &&
+        current.width === target.width && current.height === target.height) {
       return false;
     }
     if (typeof desktopLayer.moveWindow !== 'function') return false;
     return desktopLayer.moveWindow(hwnd, {
-      x: desiredScreenBounds.x - origin.x,
-      y: desiredScreenBounds.y - origin.y,
-      width: desiredScreenBounds.width,
-      height: desiredScreenBounds.height
+      x: target.x - origin.x,
+      y: target.y - origin.y,
+      width: target.width,
+      height: target.height
     });
   }
 
@@ -133,9 +135,11 @@ function createWindowController({
         const actual = hwnd && typeof desktopLayer.windowRect === 'function'
           ? desktopLayer.windowRect(hwnd)
           : null;
-        // 记下用户拖到的新位置，下次启动按它摆回去。
-        if (actual) desiredScreenBounds = { ...actual };
-        onBoundsChanged(actual || window.getBounds());
+        // 记下用户拖到的新位置，下次启动按它摆回去。落点必须仍然可见，
+        // 否则保存一个屏幕外的坐标会让下次启动再也找不到窗口。
+        const safe = actual ? sanitizeBounds(actual) : null;
+        if (safe) desiredScreenBounds = { ...safe };
+        onBoundsChanged(safe || window.getBounds());
       } catch (error) {
         onError(error);
       }
