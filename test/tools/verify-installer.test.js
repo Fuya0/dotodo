@@ -1,4 +1,4 @@
-const test = require('node:test');
+﻿const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -32,6 +32,9 @@ function Get-ItemProperty { throw 'unexpected registry read' }
 }
 
 const repositoryRoot = path.join(__dirname, '..', '..');
+// 这些用例要启动 Windows PowerShell；macOS/Linux 上没有它，明确跳过而不是假装通过。
+const powershellSkip = process.platform === 'win32' ? false : '需要 Windows PowerShell';
+const winTest = (name, fn) => test(name, { skip: powershellSkip }, fn);
 const scriptPath = path.join(repositoryRoot, 'tools', 'verify-installer.ps1');
 const bytes = fs.readFileSync(scriptPath);
 const text = bytes.toString('utf8');
@@ -44,7 +47,7 @@ function codeLines() {
     .filter((entry) => entry.line.length > 0 && !entry.line.startsWith('#'));
 }
 
-test('步骤失败会记录失败并抛出，阻止下一步', () => {
+winTest('步骤失败会记录失败并抛出，阻止下一步', () => {
   runFunctions(`
 $script:nextRan = $false
 try {
@@ -56,7 +59,7 @@ if ($results.Count -ne 1 -or $results[0].Status -ne 'failed') { throw 'failure n
 `);
 });
 
-test('安装前拒绝预存目录与快捷方式，安装失败前不允许清理', () => {
+winTest('安装前拒绝预存目录与快捷方式，安装失败前不允许清理', () => {
   runFunctions(`
 $installDirectory = 'C:\\probe\\owned'
 $desktopShortcut = 'C:\\fake-desktop\\DoTodo.lnk'
@@ -82,7 +85,7 @@ Invoke-ProbeCleanup
 `);
 });
 
-test('卸载只执行本次目录的命令，不选首项或相邻前缀路径', () => {
+winTest('卸载只执行本次目录的命令，不选首项或相邻前缀路径', () => {
   runFunctions(`
 $installDirectory = 'C:\\probe\\owned'
 $script:installationStarted = $true
@@ -107,7 +110,7 @@ if (Invoke-SilentUninstall) { throw 'unowned install accepted' }
 `);
 });
 
-test('只有安装进程成功启动后才允许收尾，并遵守保留安装', () => {
+winTest('只有安装进程成功启动后才允许收尾，并遵守保留安装', () => {
   runFunctions(`
 $installDirectory = 'C:\\probe\\owned'
 $script:installerPath = 'C:\\fake\\setup.exe'
@@ -131,7 +134,7 @@ if ($script:cleanupCount -ne 1) { throw 'keep installed ignored' }
 `);
 });
 
-test('安装目录每次求值产生独立GUID路径且没有删除安装目录的指令', () => {
+winTest('安装目录每次求值产生独立GUID路径且没有删除安装目录的指令', () => {
   runFunctions(`
 $assignment = $ast.Find({param($n) $n -is [System.Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -eq '$installDirectory'}, $false)
 if (-not $assignment) { throw 'missing install directory assignment' }
@@ -142,7 +145,7 @@ if ($first -eq $second -or [IO.Path]::GetFileName($first) -notmatch '^dotodo-ins
   assert.doesNotMatch(text, /Remove-Item[^\r\n]*\$installDirectory/);
 });
 
-test('缺少原始数据显式跳过而不是通过', () => {
+winTest('缺少原始数据显式跳过而不是通过', () => {
   runFunctions(`
 $script:stepSkipped = $false
 Invoke-Step 'data' { Set-StepSkipped 'no original state' }
@@ -150,7 +153,7 @@ if ($results.Count -ne 1 -or $results[0].Status -ne 'skipped') { throw 'missing 
 `);
 });
 
-test('用户数据指纹为SHA256，可检测相同长度时间戳的内容变化', () => {
+winTest('用户数据指纹为SHA256，可检测相同长度时间戳的内容变化', () => {
   const os = require('node:os');
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'dotodo-fingerprint-test-'));
   const fixture = path.join(directory, 'state.json');
@@ -212,7 +215,7 @@ test('卸载走注册表里的 QuietUninstallString', () => {
   assert.match(text, /QuietUninstallString/);
 });
 
-test('检测到已有安装时拒绝动手', () => {
+winTest('检测到已有安装时拒绝动手', () => {
   // 我们静默装到临时目录，但卸载信息是按 appId 写在注册表里的同一个键。
   // 如果用户自己装过 DoTodo，我们再装一次就会覆盖他的卸载入口。
   assert.match(text, /已经装过 DoTodo/);
@@ -264,3 +267,4 @@ test('package.json 暴露 verify:installer', () => {
   // 这个脚本会往机器上装东西，不能混进默认的 verify:win。
   assert.doesNotMatch(manifest.scripts['verify:win'] || '', /verify-installer/);
 });
+

@@ -1,5 +1,6 @@
-const test = require('node:test');
+﻿const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
 
 let ipcModule = {};
 try {
@@ -67,7 +68,7 @@ function createHarness(overrides = {}) {
     save: (state) => calls.push(['save', state]),
     importFrom: (filePath) => (calls.push(['importFrom', filePath]), { schemaVersion: 1, marker: 'imported' }),
     exportTo: (filePath, state) => calls.push(['exportTo', filePath, state]),
-    getPaths: () => ({ primary: 'C:\\data\\state.json' })
+    getPaths: () => ({ primary: path.join('data', 'state.json') })
   };
   const dialogs = {
     chooseImportPath: async () => 'C:\\chosen\\import.json',
@@ -297,7 +298,7 @@ test('state, data and window handlers use narrow adapters', async () => {
     ['importFrom', 'C:\\chosen\\import.json'],
     ['replaceState', { schemaVersion: 1, marker: 'imported' }],
     ['exportTo', 'C:\\chosen\\export.json', harness.snapshot],
-    ['openPath', 'C:\\data'],
+    ['openPath', path.join('data')],
     ['minimize'],
     ['close']
   ]);
@@ -455,3 +456,4 @@ test('补焦点失败也只是如实报告，不打扰用户', async () => {
   // 没挂进桌面、或者系统不给焦点，都不该变成一条报错弹窗。
   assert.deepEqual(await invoke(harness, 'window:request-desktop-focus'), { ok: true, focused: false });
 });
+

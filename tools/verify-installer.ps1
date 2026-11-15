@@ -116,9 +116,21 @@ function Get-RegistryValue($Entry, [string]$Name) {
 function Get-UserDataFingerprint {
   # 记录真实数据目录的指纹，用来证明这个脚本没碰过它。
   # 目录可能不存在（全新机器），那就返回空。
+  #
+  # 不用 Get-FileHash：它依赖 Microsoft.PowerShell.Utility 的模块自动加载，
+  # 在精简或受限的 PowerShell 环境里会直接报"无法识别"。用 .NET 的 SHA256
+  # 只依赖基础运行时，5.1 和 7 都能跑。
   $statePath = Join-Path $realUserDataDirectory 'state.json'
   if (-not (Test-Path $statePath)) { return $null }
-  return (Get-FileHash -LiteralPath $statePath -Algorithm SHA256).Hash
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  $stream = [System.IO.File]::OpenRead($statePath)
+  try {
+    $bytes = $sha.ComputeHash($stream)
+  } finally {
+    $stream.Dispose()
+    $sha.Dispose()
+  }
+  return (($bytes | ForEach-Object { $_.ToString('x2') }) -join '').ToUpperInvariant()
 }
 
 function Set-StepSkipped([string]$Reason) {
