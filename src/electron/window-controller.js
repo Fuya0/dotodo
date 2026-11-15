@@ -70,8 +70,10 @@ function createWindowController({
   /**
    * 把窗口摆回目标屏幕位置。
    *
-   * 坐标系：`desiredScreenBounds` 是屏幕坐标，原生 `moveWindow` 收的是桌面客户区
-   * 坐标，所以先减桌面原点。位置本来就对时不动，避免启动时多余地挪一下。
+   * 不能只算一次坐标就完事：挂进桌面后到底按哪个原点解释坐标，这台机器上出现过
+   * 两种相反的结果，一次算错就会把窗口推到屏幕外，而且保存后又会在下次启动继续
+   * 往外推。所以这里用闭环：移动 → 重新测量 → 用实测偏差再修正，最多三轮。
+   * 只要还能读回矩形，方向猜错也能收敛到目标位置。
    */
   function restoreDesiredPosition() {
     if (!desktopAttachment?.attached || !desktopLayer) return false;
@@ -79,24 +81,36 @@ function createWindowController({
     if (!hwnd) return false;
     const origin = typeof desktopLayer.origin === 'function' ? desktopLayer.origin() : null;
     if (!origin) return false;
-
-    const current = typeof desktopLayer.windowRect === 'function'
-      ? desktopLayer.windowRect(hwnd)
-      : null;
-    // 兜底：显示器的位置可能已经变了，恢复目标也要重新过一遍可见性检查。
-    const target = sanitizeBounds(desiredScreenBounds);
-    if (current &&
-        current.x === target.x && current.y === target.y &&
-        current.width === target.width && current.height === target.height) {
-      return false;
-    }
     if (typeof desktopLayer.moveWindow !== 'function') return false;
-    return desktopLayer.moveWindow(hwnd, {
-      x: target.x - origin.x,
-      y: target.y - origin.y,
-      width: target.width,
-      height: target.height
-    });
+    if (typeof desktopLayer.windowRect !== 'function') return false;
+
+    const target = sanitizeBounds(desiredScreenBounds);
+    let clientX = target.x - origin.x;
+    let clientY = target.y - origin.y;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const before = desktopLayer.windowRect(hwnd);
+      if (before &&
+          Math.abs(before.x - target.x) <= 2 && Math.abs(before.y - target.y) <= 2 &&
+          before.width === target.width && before.height === target.height) {
+        return true;
+      }
+      desktopLayer.moveWindow(hwnd, {
+        x: clientX,
+        y: clientY,
+        width: target.width,
+        height: target.height
+      });
+      const after = desktopLayer.windowRect(hwnd);
+      if (!after) return false;
+      const deltaX = target.x - after.x;
+      const deltaY = target.y - after.y;
+      if (Math.abs(deltaX) <= 2 && Math.abs(deltaY) <= 2) return true;
+      // 用实测偏差修正下一次写入的客户区坐标。
+      clientX += deltaX;
+      clientY += deltaY;
+    }
+    return false;
   }
 
   /** 让窗口真正接收输入：桌面层优先补桌面焦点，否则退回普通窗口焦点。 */

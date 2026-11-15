@@ -285,10 +285,13 @@ test('桌面挂载失败时第一次显示退回普通窗口焦点', () => {
 });
 test('挂载后按桌面原点把窗口摆回指定的屏幕位置', () => {
   const desktopLayer = createFakeDesktopLayer();
-  const moves = [];
-  desktopLayer.origin = () => ({ x: -1920, y: 0 });
-  desktopLayer.windowRect = () => ({ x: -1155, y: 211, width: 390, height: 610 });
-  desktopLayer.moveWindow = (handle, rect) => { moves.push(rect); return true; };
+  const origin = { x: -1920, y: 0 };
+  let client = { x: 0, y: 0 };
+  desktopLayer.origin = () => origin;
+  desktopLayer.moveWindow = (handle, rect) => { client = { x: rect.x, y: rect.y }; return true; };
+  desktopLayer.windowRect = () => ({
+    x: client.x + origin.x, y: client.y + origin.y, width: 390, height: 610
+  });
   const { window } = createHarness({
     desktopLayer,
     bounds: { x: 765, y: 211, width: 390, height: 610 }
@@ -296,7 +299,10 @@ test('挂载后按桌面原点把窗口摆回指定的屏幕位置', () => {
 
   window.onceListeners.get('ready-to-show')();
 
-  assert.deepEqual(moves, [{ x: 2685, y: 211, width: 390, height: 610 }]);
+  assert.deepEqual(
+    { x: client.x + origin.x, y: client.y + origin.y },
+    { x: 765, y: 211 }
+  );
 });
 
 test('位置已经正确时不做多余的移动', () => {
@@ -326,3 +332,32 @@ test('屏幕外的位置在保存前被修正，不会落盘成看不见的坐�
   scheduled.at(-1)();
   assert.deepEqual(boundsChanges, [{ x: 765, y: 211, width: 380, height: 595 }]);
 });
+test('第一次移动没命中时，按实测偏差继续修正到目标位置', () => {
+  const desktopLayer = createFakeDesktopLayer();
+  // 模拟"写入的客户区坐标与读回的屏幕坐标相差 500px"的平台行为：
+  // 只算一次会停在 1265，闭环修正后应回到 765。
+  let client = { x: 0, y: 0 };
+  const platformOffset = 500;
+  desktopLayer.origin = () => ({ x: 0, y: 0 });
+  desktopLayer.moveWindow = (handle, rect) => {
+    client = { x: rect.x, y: rect.y };
+    return true;
+  };
+  desktopLayer.windowRect = () => ({
+    x: client.x + platformOffset, y: client.y, width: 380, height: 595
+  });
+  const { window } = createHarness({
+    desktopLayer,
+    bounds: { x: 765, y: 211, width: 380, height: 595 }
+  });
+
+  window.onceListeners.get('ready-to-show')();
+
+  assert.deepEqual(
+    { x: client.x + platformOffset, y: client.y },
+    { x: 765, y: 211 },
+    '最终应落回目标屏幕位置'
+  );
+});
+
+
