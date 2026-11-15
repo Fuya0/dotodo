@@ -27,7 +27,8 @@ jobs:
             # 只传安装器。绝不能写 release/*：那里包含 300 MB+ 的解压目录。
             files: release/*.exe
           - os: macos-latest
-            package: npm run dist:mac -- --publish never
+            # 显式要求两个架构：macOS runner 是 arm64，只跑默认架构会漏掉 Intel 包。
+            package: npm run dist:mac -- --publish never --x64 --arm64
             artifact: dotodo-macos
             files: |
               release/*.dmg
