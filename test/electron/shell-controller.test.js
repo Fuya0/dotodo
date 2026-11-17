@@ -222,54 +222,32 @@ test('托盘创建失败时快捷键仍然可用', () => {
   assert.equal(harness.trays.length, 0);
 });
 
-test('托盘菜单的条目与勾选状态来自当前设置', () => {
-  const harness = createHarness({ settings: { closeToTray: false, launchAtLogin: true } });
+test('托盘菜单只保留开机启动与退出', () => {
+  const harness = createHarness({ settings: { launchAtLogin: true } });
   harness.controller.initialize();
 
   const labels = harness.menus.at(-1).filter((item) => item.label).map((item) => item.label);
-  assert.deepEqual(labels, [
-    '显示在桌面',
-    '从桌面隐藏',
-    '关闭时隐藏到托盘',
-    '开机启动',
-    '退出 DoTodo'
-  ]);
-  assert.equal(menuItem(harness, '关闭时隐藏到托盘').checked, false);
+  assert.deepEqual(labels, ['开机启动', '退出 DoTodo']);
   assert.equal(menuItem(harness, '开机启动').checked, true);
 });
 
-test('托盘菜单把设置变更交给 onCommand 意图，而不是自己写状态', () => {
+test('托盘菜单把开机启动交给 onCommand 意图，而不是自己写状态', () => {
   const harness = createHarness();
   harness.controller.initialize();
 
-  menuItem(harness, '关闭时隐藏到托盘').click({ checked: false });
   menuItem(harness, '开机启动').click({ checked: true });
 
-  assert.deepEqual(harness.intents, [
-    { type: 'close-to-tray', enabled: false },
-    { type: 'launch-at-login', enabled: true }
-  ]);
+  assert.deepEqual(harness.intents, [{ type: 'launch-at-login', enabled: true }]);
 });
 
-test('托盘菜单的显示与隐藏直接作用在窗口上', () => {
-  const harness = createHarness();
-  harness.controller.initialize();
-
-  menuItem(harness, '从桌面隐藏').click();
-  assert.equal(harness.window.visible, false);
-
-  menuItem(harness, '显示在桌面').click();
-  assert.equal(harness.window.visible, true);
-  assert.equal(harness.intents.length, 0);
-});
-
-test('托盘显示会先恢复最小化窗口', () => {
+test('托盘左键切换显示时会先恢复最小化窗口', () => {
   const harness = createHarness();
   let minimized = true;
   harness.window.isMinimized = () => minimized;
   harness.window.restore = () => { minimized = false; };
+  harness.window.visible = false;
   harness.controller.initialize();
-  menuItem(harness, '显示在桌面').click();
+  harness.trays.at(-1).clickHandler();
   assert.equal(minimized, false);
   assert.equal(harness.window.visible, true);
 });
@@ -288,11 +266,11 @@ test('refreshMenu 按最新设置重建菜单', () => {
   harness.controller.initialize();
   assert.equal(harness.menus.length, 1);
 
-  harness.settings.closeToTray = false;
+  harness.settings.launchAtLogin = true;
   harness.controller.refreshMenu();
 
   assert.equal(harness.menus.length, 2);
-  assert.equal(menuItem(harness, '关闭时隐藏到托盘').checked, false);
+  assert.equal(menuItem(harness, '开机启动').checked, true);
 });
 
 test('setLaunchAtLogin 读回系统状态确认设置真的生效', () => {
@@ -337,90 +315,38 @@ test('setLoginItemSettings 抛异常时返回失败而不是让主进程崩溃',
   assert.match(result.error, /login item unavailable/);
 });
 
-test('关闭窗口时按 closeToTray 隐藏而不是退出', () => {
+test('关闭窗口不再被拦截，直接走系统默认的退出', () => {
   const harness = createHarness();
   harness.controller.initialize();
-  const event = { prevented: 0, preventDefault() { this.prevented += 1; } };
 
-  harness.windowListeners.get('close')(event);
-  assert.equal(event.prevented, 1);
-  assert.equal(harness.window.visible, false);
-
-  harness.settings.closeToTray = false;
-  harness.windowListeners.get('close')(event);
-  assert.equal(event.prevented, 1);
+  assert.equal(harness.windowListeners.has('close'), false, '不该再注册 close 拦截');
 });
 
-test('托盘不可用时关闭窗口不会被拦截，否则窗口会再也找不回来', () => {
-  const harness = createHarness({ failTray: true });
-  harness.controller.initialize();
-  const event = { prevented: 0, preventDefault() { this.prevented += 1; } };
-
-  harness.windowListeners.get('close')(event);
-
-  assert.equal(event.prevented, 0);
-});
-
-test('窗口被重建之后，closeToTray 会重新绑定到新窗口', () => {
-  // macOS 上关掉窗口应用并不退出，再从 Dock 唤起会创建一个新窗口。
-  // 如果不重新绑定，那个 close 监听还挂在已被销毁的旧窗口上，
-  // 表现是「关闭到托盘时灵时不灵」。
+test('窗口被重建之后也不会注册 close 拦截', () => {
   const harness = createHarness();
   harness.controller.initialize();
-  const oldWindow = harness.window;
-  assert.equal(oldWindow.listeners.has('close'), true);
-
   const newWindow = harness.replaceWindow();
-  assert.equal(newWindow.listeners.has('close'), false, '新窗口一开始不该有任何监听');
-
   harness.controller.bindWindow();
-
-  assert.equal(newWindow.listeners.has('close'), true, '新窗口应该被重新绑定');
-  assert.equal(oldWindow.listeners.has('close'), false, '旧窗口上的监听应该被解开');
-
-  const event = { prevented: 0, preventDefault() { this.prevented += 1; } };
-  newWindow.listeners.get('close')(event);
-  assert.equal(event.prevented, 1, '新窗口的关闭应该被「关闭到托盘」拦下');
-  assert.equal(newWindow.visible, false);
+  assert.equal(newWindow.listeners.has('close'), false);
 });
 
-test('bindWindow 可以重复调用而不会叠加监听', () => {
+test('bindWindow 重复调用不会抛异常', () => {
   const harness = createHarness();
   harness.controller.initialize();
-  harness.controller.bindWindow();
-  harness.controller.bindWindow();
-
-  const bound = harness.calls.filter(([name]) => name === 'window.on').length;
-  const unbound = harness.calls.filter(([name]) => name === 'window.off').length;
-  assert.equal(bound - unbound, 1, '同一时刻只应该留着一个 close 监听');
+  assert.equal(harness.controller.bindWindow(), true);
+  assert.equal(harness.controller.bindWindow(), true);
 });
 
-test('window 还不存在时 bindWindow 返回 false 而不是抛异常', () => {
+test('window 还不存在时 bindWindow 也返回 true', () => {
   const harness = createHarness({ noWindow: true });
-  assert.equal(harness.controller.bindWindow(), false);
+  assert.equal(harness.controller.bindWindow(), true);
 });
 
-test('用户主动退出时不再被 closeToTray 拦住', () => {
+test('quit 仍然会真正退出应用', () => {
   const harness = createHarness();
   harness.controller.initialize();
-  const event = { prevented: 0, preventDefault() { this.prevented += 1; } };
-
   harness.controller.quit();
-  harness.windowListeners.get('close')(event);
-
-  assert.equal(event.prevented, 0);
   assert.equal(harness.calls.some(([name]) => name === 'quit'), true);
-});
-
-test('系统触发的 before-quit 同样绕过 closeToTray', () => {
-  const harness = createHarness();
-  harness.controller.initialize();
-  const event = { prevented: 0, preventDefault() { this.prevented += 1; } };
-
-  harness.appListeners.get('before-quit')();
-  harness.windowListeners.get('close')(event);
-
-  assert.equal(event.prevented, 0);
 });
 
 test('toggleVisibility 在显示与隐藏之间切换窗口', () => {
@@ -446,13 +372,10 @@ test('全局快捷键真的绑定了 toggleVisibility', () => {
 test('dispose 注销快捷键、销毁托盘并解绑窗口事件', () => {
   const harness = createHarness();
   harness.controller.initialize();
-  assert.equal(harness.windowListeners.has('close'), true);
-
   harness.controller.dispose();
 
   assert.equal(harness.registered.size, 0);
   assert.equal(harness.trays[0].destroyed, true);
-  assert.equal(harness.windowListeners.has('close'), false);
 });
 
 test('dispose 从当初绑定的那个窗口上解绑', () => {
@@ -482,3 +405,5 @@ test('没有 initialize 就 dispose 不会抛异常', () => {
   const harness = createHarness();
   assert.doesNotThrow(() => harness.controller.dispose());
 });
+
+

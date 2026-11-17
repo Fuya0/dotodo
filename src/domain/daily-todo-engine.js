@@ -135,21 +135,32 @@ function createDailyTodoEngine(initialState, dependencies) {
   function ensureCurrentDay(now) {
     const currentDate = localDateOf(now);
     if (!currentDate) return { ...failure('当前时间无效。'), rolledOver: false };
+    // 空清单的那一天没有任何内容可回顾，归档它只会在历史里留下一排 0/0。
+    // 顺手清掉以前版本已经写进去的空记录（用户看到过 14、15 号两条 0/0）。
+    const beforePrune = state.history.length;
+    state.history = state.history.filter((day) => day.tasks.length > 0);
+    const prunedEmptyDays = state.history.length !== beforePrune;
+
     const comparison = currentDate.localeCompare(state.activeDay.date);
-    if (comparison === 0) return { ...success(), rolledOver: false, clockMovedBackward: false };
+    if (comparison === 0) {
+      return { ...success(), rolledOver: false, clockMovedBackward: false, prunedEmptyDays };
+    }
     if (comparison < 0) {
       return {
         ...success(),
         rolledOver: false,
         clockMovedBackward: true,
+        prunedEmptyDays,
         warning: '系统日期早于当前清单日期；为保护历史记录，DoTodo 没有回退日期。'
       };
     }
 
-    state.activeDay.closedAt = now;
-    state.history.unshift(state.activeDay);
+    if (state.activeDay.tasks.length > 0) {
+      state.activeDay.closedAt = now;
+      state.history.unshift(state.activeDay);
+    }
     state.activeDay = { date: currentDate, closedAt: null, tasks: [] };
-    return { ...success(), rolledOver: true, clockMovedBackward: false };
+    return { ...success(), rolledOver: true, clockMovedBackward: false, prunedEmptyDays };
   }
 
   function updateSettings(patch) {
@@ -160,7 +171,8 @@ function createDailyTodoEngine(initialState, dependencies) {
       'backgroundOpacity',
       'windowMode',
       'closeToTray',
-      'launchAtLogin'
+      'launchAtLogin',
+      'theme'
     ]);
     if (!isPlainObject(patch) || Object.keys(patch).length === 0 ||
         Object.keys(patch).some((key) => !allowedKeys.has(key))) {

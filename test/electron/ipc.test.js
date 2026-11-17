@@ -1,4 +1,4 @@
-﻿const test = require('node:test');
+const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 
@@ -16,8 +16,8 @@ const EXPECTED_CHANNELS = [
   'data:open-folder',
   'history:continue-task',
   'history:delete-task',
-  'settings:set-close-to-tray',
   'settings:set-launch-at-login',
+  'settings:set-theme',
   'state:get-snapshot',
   'task:add',
   'task:delete-today',
@@ -214,16 +214,28 @@ test('engine rejections are not marked as applied', async () => {
 });
 
 test('settings reject coerced values and coordinate native effects', async () => {
+test('theme commands accept only known themes and persist through the engine', async () => {
   const harness = createHarness();
   register(harness);
-  assert.equal((await invoke(harness, 'settings:set-close-to-tray', 1)).ok, false);
+
+  assert.equal((await invoke(harness, 'settings:set-theme', 'nope')).ok, false);
+  assert.deepEqual(harness.calls, []);
+
+  await invoke(harness, 'settings:set-theme', 'cyber');
+
+  assert.deepEqual(harness.calls.filter(([name]) => name === 'updateSettings'), [
+    ['updateSettings', { theme: 'cyber' }]
+  ]);
+  assert.deepEqual(harness.calls.map(([name]) => name), ['updateSettings', 'save']);
+});
+
+  const harness = createHarness();
+  register(harness);
   assert.equal((await invoke(harness, 'settings:set-launch-at-login', 'yes')).ok, false);
   assert.deepEqual(harness.calls, []);
-  await invoke(harness, 'settings:set-close-to-tray', false);
   await invoke(harness, 'settings:set-launch-at-login', true);
 
   assert.deepEqual(harness.calls.filter(([name]) => name === 'updateSettings'), [
-    ['updateSettings', { closeToTray: false }],
     ['updateSettings', { launchAtLogin: true }]
   ]);
   assert.equal(harness.calls.some(([name, value]) => name === 'setLaunchAtLogin' && value === true), true);
@@ -247,9 +259,12 @@ test('settings commands refresh the native shell only after the state is persist
   const harness = createHarness();
   register(harness);
 
-  await invoke(harness, 'settings:set-close-to-tray', false);
+  await invoke(harness, 'settings:set-launch-at-login', false);
 
-  assert.deepEqual(harness.calls.map(([name]) => name), ['updateSettings', 'save', 'syncSettings']);
+  assert.deepEqual(
+    harness.calls.map(([name]) => name),
+    ['setLaunchAtLogin', 'updateSettings', 'save', 'syncSettings']
+  );
 });
 
 test('failed settings commands do not refresh the native shell', async () => {
@@ -258,7 +273,7 @@ test('failed settings commands do not refresh the native shell', async () => {
   });
   register(harness);
 
-  const result = await invoke(harness, 'settings:set-close-to-tray', false);
+  const result = await invoke(harness, 'settings:set-launch-at-login', 1);
 
   assert.equal(result.ok, false);
   assert.equal(harness.calls.some(([name]) => name === 'syncSettings'), false);
@@ -456,4 +471,5 @@ test('补焦点失败也只是如实报告，不打扰用户', async () => {
   // 没挂进桌面、或者系统不给焦点，都不该变成一条报错弹窗。
   assert.deepEqual(await invoke(harness, 'window:request-desktop-focus'), { ok: true, focused: false });
 });
+
 

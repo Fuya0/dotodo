@@ -24,8 +24,9 @@ test('createState creates an open local day with desktop defaults', () => {
     backgroundOpacity: 0.82,
     windowMode: 'desktop',
     closeToTray: true,
-    launchAtLogin: false
-  });
+    launchAtLogin: false,
+  theme: 'glass'
+});
   assert.deepEqual(state.windowBounds, { width: 390, height: 610 });
 });
 
@@ -64,8 +65,9 @@ test('validateState rejects malformed dates and duplicate task ids', () => {
       backgroundOpacity: 0.82,
       windowMode: 'desktop',
       closeToTray: true,
-      launchAtLogin: false
-    },
+      launchAtLogin: false,
+  theme: 'glass'
+},
     windowBounds: { width: 390, height: 610 }
   };
 
@@ -165,8 +167,9 @@ function validLinkedState() {
       backgroundOpacity: 0.82,
       windowMode: 'desktop',
       closeToTray: true,
-      launchAtLogin: false
-    },
+      launchAtLogin: false,
+  theme: 'glass'
+},
     windowBounds: { width: 390, height: 610 }
   };
 }

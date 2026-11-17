@@ -366,8 +366,6 @@ async function handleShellIntent(intent) {
       const applied = shellController.setLaunchAtLogin(intent.enabled);
       if (!applied.ok) throw new Error(applied.error);
       persistSettings({ launchAtLogin: intent.enabled });
-    } else if (intent.type === 'close-to-tray') {
-      persistSettings({ closeToTray: intent.enabled });
     }
   } catch (error) {
     console.error('[DoTodo shell]', error);

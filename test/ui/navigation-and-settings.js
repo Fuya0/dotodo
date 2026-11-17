@@ -58,7 +58,7 @@ check('设置按钮 aria-expanded 为 true', q('#settingsButton').getAttribute('
 check('设置面板里没有窗口层级分组', q('#windowModeGroup') === null);
 check('界面里没有任何分段控件（层级选择器是它唯一的使用者）', qa('.segment').length === 0);
 
-check('有「关闭时隐藏到托盘」开关', q('#closeToTrayToggle') !== null);
+check('不再提供「关闭时隐藏到托盘」开关', q('#closeToTrayToggle') === null);
 check('有「开机启动」开关', q('#launchAtLoginToggle') !== null);
 check('有导入按钮', q('#importButton') !== null);
 check('有导出按钮', q('#exportButton') !== null);

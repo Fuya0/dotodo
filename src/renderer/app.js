@@ -46,7 +46,7 @@ const dom = {
   settingsButton: document.querySelector('#settingsButton'),
   settingsPanel: document.querySelector('#settingsPanel'),
   settingsCloseButton: document.querySelector('#settingsCloseButton'),
-  closeToTrayToggle: document.querySelector('#closeToTrayToggle'),
+  themeSwatches: [...document.querySelectorAll('.theme-swatch')],
   launchAtLoginToggle: document.querySelector('#launchAtLoginToggle'),
   importButton: document.querySelector('#importButton'),
   exportButton: document.querySelector('#exportButton'),
@@ -133,8 +133,22 @@ function render() {
 }
 
 function renderSettings(settings) {
-  dom.closeToTrayToggle.checked = settings.closeToTray;
-  dom.launchAtLoginToggle.checked = settings.launchAtLogin;}
+  dom.launchAtLoginToggle.checked = settings.launchAtLogin;
+  applyTheme(settings.theme);
+}
+
+/** 主题挂在 <html data-theme> 上，由 styles.css 里的变量块接管。 */
+function applyTheme(theme) {
+  const next = typeof theme === 'string' && theme ? theme : 'glass';
+  if (document.documentElement.dataset.theme !== next) {
+    document.documentElement.dataset.theme = next;
+  }
+  for (const swatch of dom.themeSwatches) {
+    const selected = swatch.dataset.theme === next;
+    swatch.classList.toggle('is-active', selected);
+    swatch.setAttribute('aria-checked', String(selected));
+  }
+}
 
 /* ---------- Today ---------- */
 
@@ -576,13 +590,19 @@ document.addEventListener('mousedown', () => {
 
 /* ---------- 设置：原生开关 ---------- */
 
-dom.closeToTrayToggle.addEventListener('change', (event) => {
-  runCommand(window.dotodo.setCloseToTray(event.target.checked));
-});
+
 
 dom.launchAtLoginToggle.addEventListener('change', (event) => {
   runCommand(window.dotodo.setLaunchAtLogin(event.target.checked));
 });
+
+for (const swatch of dom.themeSwatches) {
+  swatch.addEventListener('click', () => {
+    // 先本地切换（立刻看到效果），再让主进程确认并落盘；失败会随快照回滚。
+    applyTheme(swatch.dataset.theme);
+    runCommand(window.dotodo.setTheme(swatch.dataset.theme));
+  });
+}
 
 dom.minimizeButton.addEventListener('click', () => window.dotodo.minimizeWindow());
 dom.closeButton.addEventListener('click', () => window.dotodo.closeWindow());
@@ -708,3 +728,4 @@ async function init() {
 }
 
 init();
+

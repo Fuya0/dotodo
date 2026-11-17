@@ -83,16 +83,9 @@ function createShellController(options) {
   function refreshMenu() {
     if (!tray || typeof Menu?.buildFromTemplate !== 'function') return false;
     const settings = getSettings() ?? {};
+    // 只留两项：开机启动、退出。显示/隐藏可以点托盘图标或快捷键，
+    // 「关闭时隐藏」也不该做成开关——关闭窗口就是关闭应用。
     tray.setContextMenu(Menu.buildFromTemplate([
-      { label: '显示在桌面', click: showWindow },
-      { label: '从桌面隐藏', click: hideWindow },
-      { type: 'separator' },
-      {
-        label: '关闭时隐藏到托盘',
-        type: 'checkbox',
-        checked: Boolean(settings.closeToTray),
-        click: (item) => runIntent({ type: 'close-to-tray', enabled: Boolean(item.checked) })
-      },
       {
         label: '开机启动',
         type: 'checkbox',
@@ -153,11 +146,10 @@ function createShellController(options) {
   }
 
   /**
-   * 把「关闭时隐藏到托盘」挂到当前窗口上。
+   * 窗口关闭不需要拦截：关闭就是退出应用。
    *
-   * **幂等**：先解开上一次的绑定再挂新的。macOS 上用户关掉窗口后应用并不退出，
-   * 再从 Dock 唤起会创建一个新窗口——那边必须重新绑定一次，否则新窗口的关闭按钮
-   * 会真的把窗口销毁，"关闭到托盘"看起来时灵时不灵。
+   * 这里保留一个空的绑定入口，是因为 macOS 上重建窗口后会调用它；
+   * 现在它不再注册任何监听，关闭按钮走系统默认路径。
    */
   function bindWindow() {
     if (closeBoundWindow && closeHandler && typeof closeBoundWindow.removeListener === 'function') {
@@ -165,21 +157,6 @@ function createShellController(options) {
     }
     closeBoundWindow = null;
     closeHandler = null;
-
-    const window = getWindow();
-    if (!window || typeof window.on !== 'function') return false;
-
-    closeHandler = (event) => {
-      if (isQuitting) return;
-      // 托盘是「藏起来之后还能找回来」的唯一入口。连托盘都没建起来时把它藏掉，
-      // 用户就再也没法把窗口调出来了——这种情况下宁可让它照常关闭。
-      if (!tray) return;
-      if (!getSettings()?.closeToTray) return;
-      if (event && typeof event.preventDefault === 'function') event.preventDefault();
-      hideWindow();
-    };
-    window.on('close', closeHandler);
-    closeBoundWindow = window;
     return true;
   }
 

@@ -11,8 +11,8 @@ contextBridge.exposeInMainWorld('dotodo', Object.freeze({
   deleteHistoryTask: (date, id) => ipcRenderer.invoke('history:delete-task', date, id),
   continueTask: (date, id) => ipcRenderer.invoke('history:continue-task', date, id),
   undo: (token) => ipcRenderer.invoke('undo:apply', token),
-  setCloseToTray: (value) => ipcRenderer.invoke('settings:set-close-to-tray', value),
   setLaunchAtLogin: (value) => ipcRenderer.invoke('settings:set-launch-at-login', value),
+  setTheme: (value) => ipcRenderer.invoke('settings:set-theme', value),
   importData: () => ipcRenderer.invoke('data:import'),
   exportData: () => ipcRenderer.invoke('data:export'),
   openDataFolder: () => ipcRenderer.invoke('data:open-folder'),
@@ -36,3 +36,4 @@ contextBridge.exposeInMainWorld('dotodo', Object.freeze({
     ipcRenderer.on('state:changed', (_event, snapshot) => handler(snapshot));
   }
 }));
+

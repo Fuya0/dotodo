@@ -1,4 +1,4 @@
-const test = require('node:test');
+﻿const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createState, validateState } = require('../../src/domain/state-schema');
 
@@ -131,6 +131,25 @@ test('moving to a later local date archives Today without carrying tasks', () =>
   assert.equal(snapshot.history[0].tasks[0].text, '不会自动续期');
 });
 
+test('空清单跨日不产生历史记录', () => {
+  const engine = createEngine();
+  const result = engine.ensureCurrentDay('2026-09-14T00:00:01.000+08:00');
+  const snapshot = engine.getSnapshot();
+  assert.equal(result.rolledOver, true);
+  assert.equal(snapshot.activeDay.date, '2026-09-14');
+  assert.deepEqual(snapshot.history, []);
+});
+
+test('已有的空历史记录会被清掉，有任务的保留', () => {
+  const engine = createEngine();
+  engine.addTask('真实任务');
+  engine.ensureCurrentDay('2026-09-14T00:00:01.000+08:00');
+  engine.ensureCurrentDay('2026-09-15T00:00:01.000+08:00');
+  engine.ensureCurrentDay('2026-09-16T00:00:01.000+08:00');
+  const snapshot = engine.getSnapshot();
+  assert.deepEqual(snapshot.history.map((day) => day.date), ['2026-09-13']);
+  assert.equal(snapshot.history[0].tasks[0].text, '真实任务');
+});
 test('clock rollback keeps the current day and returns a warning', () => {
   const engine = createEngine();
 
@@ -291,3 +310,4 @@ function task(id, text, completed, createdAt) {
     hasBeenContinued: false
   };
 }
+

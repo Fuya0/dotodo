@@ -8,8 +8,12 @@ const DEFAULT_SETTINGS = Object.freeze({
   // src/electron/window-controller.js）。这个字段同样只为老存档保留。
   windowMode: 'desktop',
   closeToTray: true,
-  launchAtLogin: false
+  launchAtLogin: false,
+  // 外观主题。老存档没有这个字段时按默认玻璃主题处理。
+  theme: 'glass'
 });
+
+const THEMES = Object.freeze(['glass', 'pixel', 'cyber', 'ink', 'frost']);
 
 const DEFAULT_WINDOW_BOUNDS = Object.freeze({ width: 390, height: 610 });
 const LOCAL_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -84,12 +88,18 @@ function validateState(value) {
   const settings = value.settings;
   // backgroundOpacity 与 windowMode 都是遗留字段：界面和 IPC 不再暴露它们，
   // 但老存档里带着这几个值，所以照样校验、照样放行。
+  // theme 是后加的字段，老存档没有它——不能因此把用户数据判成损坏，缺省按 glass。
+  const theme = settings && settings.theme === undefined ? DEFAULT_SETTINGS.theme : settings?.theme;
   if (!settings || !Number.isFinite(settings.backgroundOpacity) ||
       settings.backgroundOpacity < 0.55 || settings.backgroundOpacity > 1 ||
       !['normal', 'topmost', 'desktop'].includes(settings.windowMode) ||
-      typeof settings.closeToTray !== 'boolean' || typeof settings.launchAtLogin !== 'boolean') {
+      typeof settings.closeToTray !== 'boolean' || typeof settings.launchAtLogin !== 'boolean' ||
+      !THEMES.includes(theme)) {
     return invalid('设置值无效。');
   }
+
+  const normalized = cloneState(value);
+  normalized.settings.theme = theme;
 
   const bounds = value.windowBounds;
   if (!bounds || !Number.isFinite(bounds.width) || !Number.isFinite(bounds.height) ||
@@ -99,7 +109,7 @@ function validateState(value) {
     return invalid('窗口位置或尺寸无效。');
   }
 
-  return { ok: true, state: cloneState(value) };
+  return { ok: true, state: normalized };
 }
 
 function validateTask(task, ownDate) {
@@ -181,5 +191,6 @@ module.exports = {
   createState,
   localDateOf,
   parseIsoInstant,
-  validateState
+  validateState,
+  THEMES
 };

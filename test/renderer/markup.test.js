@@ -115,7 +115,8 @@ test('渲染脚本只调用这一阶段开放的主进程接口', () => {
   const allowed = new Set([
     'getSnapshot', 'getStatus', 'addTask', 'editTask', 'toggleTask', 'deleteTodayTask', 'undo',
     'reorderTask', 'deleteHistoryTask', 'continueTask',
-    'setCloseToTray', 'setLaunchAtLogin',
+    'setLaunchAtLogin',
+    'setTheme',
     'importData', 'exportData', 'openDataFolder',
     'minimizeWindow', 'closeWindow', 'requestDesktopFocus', 'onSnapshot'
   ]);

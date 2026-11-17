@@ -77,10 +77,12 @@ function deriveSettingsView(snapshot) {
   assertSnapshot(snapshot);
 
   const settings = snapshot.settings && typeof snapshot.settings === 'object' ? snapshot.settings : {};
+  const themes = ['glass', 'pixel', 'cyber', 'ink', 'frost'];
 
   return {
     closeToTray: Boolean(settings.closeToTray),
-    launchAtLogin: Boolean(settings.launchAtLogin)
+    launchAtLogin: Boolean(settings.launchAtLogin),
+    theme: themes.includes(settings.theme) ? settings.theme : 'glass'
   };
 }
 

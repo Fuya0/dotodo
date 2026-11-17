@@ -54,14 +54,20 @@ test('preload exposes a frozen purpose-specific surface', () => {
     'openDataFolder',
     'reorderTask',
     'requestDesktopFocus',
-    'setCloseToTray',
-    'setLaunchAtLogin',
+      'setLaunchAtLogin',
+  'setTheme',
     'toggleTask',
     'undo'
   ]);
   assert.equal(Object.isFrozen(api), true);
   assert.equal('invoke' in api, false);
   assert.equal('send' in api, false);
+});
+
+test('preload maps setTheme onto the fixed channel', async () => {
+  const { api, calls } = executePreload();
+  await api.setTheme('pixel');
+  assert.deepEqual(calls.at(-1), ['settings:set-theme', 'pixel']);
 });
 
 test('preload maps arguments onto fixed IPC channels', async () => {
@@ -77,7 +83,6 @@ test('preload maps arguments onto fixed IPC channels', async () => {
   await api.deleteHistoryTask('2026-09-12', 'id-2');
   await api.continueTask('2026-09-12', 'id-2');
   await api.undo('undo-1');
-  await api.setCloseToTray(true);
   await api.setLaunchAtLogin(false);
   await api.importData();
   await api.exportData();
@@ -97,8 +102,7 @@ test('preload maps arguments onto fixed IPC channels', async () => {
     ['history:delete-task', '2026-09-12', 'id-2'],
     ['history:continue-task', '2026-09-12', 'id-2'],
     ['undo:apply', 'undo-1'],
-    ['settings:set-close-to-tray', true],
-    ['settings:set-launch-at-login', false],
+      ['settings:set-launch-at-login', false],
     ['data:import'],
     ['data:export'],
     ['data:open-folder'],
