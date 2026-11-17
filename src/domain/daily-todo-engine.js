@@ -171,8 +171,7 @@ function createDailyTodoEngine(initialState, dependencies) {
       'backgroundOpacity',
       'windowMode',
       'closeToTray',
-      'launchAtLogin',
-      'theme'
+      'launchAtLogin'
     ]);
     if (!isPlainObject(patch) || Object.keys(patch).length === 0 ||
         Object.keys(patch).some((key) => !allowedKeys.has(key))) {

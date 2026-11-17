@@ -48,7 +48,7 @@ node -e "const p=require('./package.json'); console.log(p.version, p.build.appId
 npm run verify:win
 ```
 
-八步：环境信息 → 单元与集成测试 → 冒烟测试 → 交互场景（14 个场景）→ 打包到目录 →
+八步：环境信息 → 单元与集成测试 → 冒烟测试 → 交互场景（13 个场景）→ 打包到目录 →
 打包产物体积分类 → 打包版壳层启动 → 打包应用空闲内存。
 
 - [ ] 退出码为 0

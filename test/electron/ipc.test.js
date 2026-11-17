@@ -17,7 +17,6 @@ const EXPECTED_CHANNELS = [
   'history:continue-task',
   'history:delete-task',
   'settings:set-launch-at-login',
-  'settings:set-theme',
   'state:get-snapshot',
   'task:add',
   'task:delete-today',
@@ -214,20 +213,6 @@ test('engine rejections are not marked as applied', async () => {
 });
 
 test('settings reject coerced values and coordinate native effects', async () => {
-test('theme commands accept only known themes and persist through the engine', async () => {
-  const harness = createHarness();
-  register(harness);
-
-  assert.equal((await invoke(harness, 'settings:set-theme', 'nope')).ok, false);
-  assert.deepEqual(harness.calls, []);
-
-  await invoke(harness, 'settings:set-theme', 'cyber');
-
-  assert.deepEqual(harness.calls.filter(([name]) => name === 'updateSettings'), [
-    ['updateSettings', { theme: 'cyber' }]
-  ]);
-  assert.deepEqual(harness.calls.map(([name]) => name), ['updateSettings', 'save']);
-});
 
   const harness = createHarness();
   register(harness);

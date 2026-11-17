@@ -12,7 +12,6 @@ contextBridge.exposeInMainWorld('dotodo', Object.freeze({
   continueTask: (date, id) => ipcRenderer.invoke('history:continue-task', date, id),
   undo: (token) => ipcRenderer.invoke('undo:apply', token),
   setLaunchAtLogin: (value) => ipcRenderer.invoke('settings:set-launch-at-login', value),
-  setTheme: (value) => ipcRenderer.invoke('settings:set-theme', value),
   importData: () => ipcRenderer.invoke('data:import'),
   exportData: () => ipcRenderer.invoke('data:export'),
   openDataFolder: () => ipcRenderer.invoke('data:open-folder'),

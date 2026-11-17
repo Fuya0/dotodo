@@ -55,19 +55,12 @@ test('preload exposes a frozen purpose-specific surface', () => {
     'reorderTask',
     'requestDesktopFocus',
       'setLaunchAtLogin',
-  'setTheme',
     'toggleTask',
     'undo'
   ]);
   assert.equal(Object.isFrozen(api), true);
   assert.equal('invoke' in api, false);
   assert.equal('send' in api, false);
-});
-
-test('preload maps setTheme onto the fixed channel', async () => {
-  const { api, calls } = executePreload();
-  await api.setTheme('pixel');
-  assert.deepEqual(calls.at(-1), ['settings:set-theme', 'pixel']);
 });
 
 test('preload maps arguments onto fixed IPC channels', async () => {

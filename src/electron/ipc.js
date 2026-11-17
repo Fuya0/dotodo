@@ -1,5 +1,4 @@
 const path = require('node:path');
-const { THEMES } = require('../domain/state-schema');
 
 const CHANNELS = Object.freeze({
   getSnapshot: 'state:get-snapshot',
@@ -13,7 +12,6 @@ const CHANNELS = Object.freeze({
   continueTask: 'history:continue-task',
   undo: 'undo:apply',
   setLaunchAtLogin: 'settings:set-launch-at-login',
-  setTheme: 'settings:set-theme',
   importData: 'data:import',
   exportData: 'data:export',
   openDataFolder: 'data:open-folder',
@@ -123,11 +121,6 @@ function registerIpc({ ipcMain, engine, store, dialogs, shell, status, prepareSt
     if (typeof shell.syncSettings === 'function') shell.syncSettings(result.snapshot.settings);
     return result;
   }
-
-  handleState(CHANNELS.setTheme, (_event, value) => {
-    if (!THEMES.includes(value)) return invalidInput('未知的主题。');
-    return runCommand(() => engine.updateSettings({ theme: value }));
-  });
 
   handleState(CHANNELS.setLaunchAtLogin, async (_event, value) => {
     if (typeof value !== 'boolean') return invalidInput('开机启动设置必须是布尔值。');

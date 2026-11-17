@@ -25,7 +25,6 @@ test('createState creates an open local day with desktop defaults', () => {
     windowMode: 'desktop',
     closeToTray: true,
     launchAtLogin: false,
-  theme: 'glass'
 });
   assert.deepEqual(state.windowBounds, { width: 390, height: 610 });
 });
@@ -66,7 +65,6 @@ test('validateState rejects malformed dates and duplicate task ids', () => {
       windowMode: 'desktop',
       closeToTray: true,
       launchAtLogin: false,
-  theme: 'glass'
 },
     windowBounds: { width: 390, height: 610 }
   };
@@ -168,7 +166,6 @@ function validLinkedState() {
       windowMode: 'desktop',
       closeToTray: true,
       launchAtLogin: false,
-  theme: 'glass'
 },
     windowBounds: { width: 390, height: 610 }
   };
